@@ -27,19 +27,19 @@ const NAV_ITEMS = [
     id: "all" as const,
     label: "Khám phá",
     icon: Compass,
-    activeColor: "text-purple-300",
+    activeColor: "text-purple-400",
   },
   {
     id: "now" as const,
     label: "Mùa này",
     icon: Flame,
-    activeColor: "text-amber-400 fill-amber-400/20",
+    activeColor: "text-amber-400",
   },
   {
     id: "popular" as const,
     label: "Thịnh hành",
     icon: TrendingUp,
-    activeColor: "text-indigo-300",
+    activeColor: "text-indigo-400",
   },
   {
     id: "upcoming" as const,
@@ -84,7 +84,7 @@ function DesktopCategoryNav({
   };
 
   return (
-    <nav className="hidden lg:flex items-center gap-1.5 shrink-0">
+    <nav className="hidden md:flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/[0.07] shrink-0">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const isActive = currentCategory === item.id;
@@ -93,16 +93,14 @@ function DesktopCategoryNav({
             key={item.id}
             type="button"
             onClick={() => handleNavClick(item.id)}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer ${
-              isActive
-                ? "bg-gradient-to-r from-purple-600/30 to-indigo-600/30 text-white border border-purple-500/60 shadow-lg shadow-purple-600/20 font-bold backdrop-blur-md"
-                : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border border-transparent font-medium"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all cursor-pointer whitespace-nowrap ${isActive
+                ? "bg-white/10 text-white font-semibold shadow-sm"
+                : "text-zinc-300 hover:text-white hover:bg-white/[0.05] font-medium"
+              }`}
           >
             <Icon
-              className={`w-4 h-4 ${
-                isActive ? item.activeColor : "text-zinc-500"
-              }`}
+              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
+                }`}
             />
             <span>{item.label}</span>
           </button>
@@ -114,23 +112,21 @@ function DesktopCategoryNav({
 
 function DesktopCategoryNavFallback() {
   return (
-    <nav className="hidden lg:flex items-center gap-1.5 shrink-0">
+    <nav className="hidden md:flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/[0.07] shrink-0">
       {NAV_ITEMS.map((item, idx) => {
         const Icon = item.icon;
         const isActive = idx === 0;
         return (
           <div
             key={item.id}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs sm:text-sm transition-all cursor-pointer ${
-              isActive
-                ? "bg-gradient-to-r from-purple-600/30 to-indigo-600/30 text-white border border-purple-500/60 shadow-lg shadow-purple-600/20 font-bold backdrop-blur-md"
-                : "text-zinc-400 hover:text-zinc-100 hover:bg-white/5 border border-transparent font-medium"
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${isActive
+                ? "bg-white/10 text-white font-semibold"
+                : "text-zinc-300 font-medium"
+              }`}
           >
             <Icon
-              className={`w-4 h-4 ${
-                isActive ? item.activeColor : "text-zinc-500"
-              }`}
+              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
+                }`}
             />
             <span>{item.label}</span>
           </div>
@@ -176,7 +172,7 @@ function MobileCategoryNav({
   };
 
   return (
-    <div className="space-y-1.5 pt-1">
+    <div className="grid grid-cols-2 gap-1.5 pt-1">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const isActive = currentCategory === item.id;
@@ -185,16 +181,14 @@ function MobileCategoryNav({
             key={item.id}
             type="button"
             onClick={() => handleNavClick(item.id)}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer text-left ${
-              isActive
-                ? "bg-gradient-to-r from-purple-600/30 to-indigo-600/30 text-white border border-purple-500/60 shadow-lg shadow-purple-600/20 font-bold backdrop-blur-md"
-                : "text-zinc-400 hover:text-white hover:bg-[#1a1d2e] border border-transparent font-medium"
-            }`}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm transition-all cursor-pointer text-left ${isActive
+                ? "bg-white/10 text-white border border-white/15 font-semibold"
+                : "text-zinc-300 hover:text-white hover:bg-white/[0.05] border border-transparent font-medium"
+              }`}
           >
             <Icon
-              className={`w-4 h-4 ${
-                isActive ? item.activeColor : "text-zinc-500"
-              }`}
+              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
+                }`}
             />
             <span>{item.label}</span>
           </button>
@@ -206,23 +200,19 @@ function MobileCategoryNav({
 
 function MobileCategoryNavFallback() {
   return (
-    <div className="space-y-1.5 pt-1">
+    <div className="grid grid-cols-2 gap-1.5 pt-1">
       {NAV_ITEMS.map((item, idx) => {
         const Icon = item.icon;
         const isActive = idx === 0;
         return (
           <div
             key={item.id}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl text-sm ${
-              isActive
-                ? "bg-gradient-to-r from-purple-600/30 to-indigo-600/30 text-white border border-purple-500/60"
-                : "text-zinc-400"
-            }`}
+            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm ${isActive ? "bg-white/10 text-white font-semibold" : "text-zinc-300"
+              }`}
           >
             <Icon
-              className={`w-4 h-4 ${
-                isActive ? item.activeColor : "text-zinc-500"
-              }`}
+              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
+                }`}
             />
             <span>{item.label}</span>
           </div>
@@ -260,7 +250,6 @@ export function Navbar({
     checkAuth();
   }, [checkAuth]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -275,31 +264,21 @@ export function Navbar({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-purple-500/20 bg-[#0b0c10]/90 backdrop-blur-md select-none">
-      <div className="w-full px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 2xl:px-14 h-16 flex items-center justify-between gap-4">
-        {/* Left: Brand Logo */}
+    <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#0b0c10]/85 backdrop-blur-xl select-none">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        {/* Left: Clean Brand Logo */}
         <Link href="/" className="flex items-center gap-2.5 group shrink-0">
           <img
             src="/icon.svg"
             alt="AniVFX Logo"
-            className="w-9 h-9 object-contain drop-shadow-md group-hover:scale-105 transition-transform shrink-0"
+            className="w-8 h-8 object-contain group-hover:scale-105 transition-transform shrink-0"
           />
-          <div className="flex flex-col">
-            <div className="flex items-center gap-1.5">
-              <span className="font-heading font-black text-lg sm:text-xl tracking-normal bg-gradient-to-r from-white via-zinc-100 to-purple-300 bg-clip-text text-transparent">
-                AniVFX
-              </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-[#7950f2]/20 text-purple-300 border border-purple-500/30">
-                MAL v4
-              </span>
-            </div>
-            <span className="text-[10px] text-zinc-400 -mt-1 hidden sm:block font-medium">
-              Discovery & Streaming
-            </span>
-          </div>
+          <span className="font-heading font-extrabold text-lg sm:text-xl tracking-tight text-white">
+            Ani<span className="text-purple-400">VFX</span>
+          </span>
         </Link>
 
-        {/* Center: Desktop Navigation Links with Icons & High-Contrast Active Style */}
+        {/* Center: Navigation Links */}
         <Suspense fallback={<DesktopCategoryNavFallback />}>
           <DesktopCategoryNav
             activeCategory={activeCategory}
@@ -307,86 +286,89 @@ export function Navbar({
           />
         </Suspense>
 
-        {/* Right: Actions Bar (STRICTLY flex-nowrap to prevent ugly wrapping) */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-nowrap shrink-0">
-          {/* Quick Search Button (Triggers Search Modal) */}
+        {/* Right: Actions Bar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap shrink-0">
+          {/* Search Trigger: Icon-only on md/lg, expanded pill on xl+ */}
           <button
             type="button"
             onClick={() =>
               onSearchFocus ? onSearchFocus() : openSearchModal()
             }
-            className="flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-xl bg-[#1a1d2e] hover:bg-[#242940] border border-purple-500/30 hover:border-purple-500/60 text-xs sm:text-sm font-semibold text-zinc-300 hover:text-white transition-all shadow-inner shrink-0 cursor-pointer active:scale-95"
+            className="flex items-center gap-2 p-2.5 xl:px-3.5 xl:py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-sm font-medium text-zinc-300 hover:text-white transition-all shrink-0 cursor-pointer active:scale-95"
             title="Tìm kiếm anime (Ctrl+K)"
+            aria-label="Tìm kiếm anime"
           >
-            <Search className="w-4 h-4 text-purple-400" />
-            <span className="hidden md:inline">Tìm kiếm...</span>
-            <kbd className="hidden xl:inline text-[10px] px-1.5 py-0.5 rounded bg-[#0b0c10] text-zinc-400 border border-purple-500/25">
+            <Search className="w-4 h-4 text-purple-400 shrink-0" />
+            <span className="hidden xl:inline text-zinc-400">Tìm anime...</span>
+            <kbd className="hidden 2xl:inline text-[11px] px-1.5 py-0.5 rounded bg-black/40 text-zinc-400 border border-white/10">
               ⌘K
             </kbd>
           </button>
 
-          {/* Watchlist Icon Button with Tooltip & Badge */}
+          {/* Watchlist Button */}
           <button
             type="button"
             onClick={() => openDrawer("watchlist")}
-            className="relative p-2.5 rounded-xl bg-[#1a1d2e] hover:bg-[#242940] border border-purple-500/25 hover:border-purple-500/60 text-zinc-200 transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
-            title="Danh sách theo dõi của tôi"
-            aria-label="Danh sách theo dõi của tôi"
+            className="relative p-2.5 rounded-xl hover:bg-white/[0.08] text-zinc-300 hover:text-white transition-all shrink-0 cursor-pointer active:scale-95"
+            title="Danh sách theo dõi"
+            aria-label="Danh sách theo dõi"
           >
-            <Bookmark className="w-4.5 h-4.5 text-[#9775fa] shrink-0" />
+            <Bookmark className="w-[18px] h-[18px] text-purple-400 shrink-0" />
             {watchlist.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-[#7950f2] text-white shadow-sm ring-2 ring-[#0b0c10]">
+              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[10px] font-bold rounded-full bg-purple-500 text-white ring-2 ring-[#0b0c10]">
                 {watchlist.length}
               </span>
             )}
           </button>
 
-          {/* History Icon Button with Tooltip & Badge */}
+          {/* History Button */}
           <button
             type="button"
             onClick={() => openDrawer("history")}
-            className="relative p-2.5 rounded-xl bg-[#1a1d2e] hover:bg-[#242940] border border-purple-500/25 hover:border-purple-500/60 text-zinc-200 transition-all shadow-sm shrink-0 cursor-pointer active:scale-95"
-            title="Lịch sử xem phim"
-            aria-label="Lịch sử xem phim"
+            className="relative p-2.5 rounded-xl hover:bg-white/[0.08] text-zinc-300 hover:text-white transition-all shrink-0 cursor-pointer active:scale-95"
+            title="Lịch sử xem"
+            aria-label="Lịch sử xem"
           >
-            <History className="w-4.5 h-4.5 text-amber-400 shrink-0" />
+            <History className="w-[18px] h-[18px] text-amber-400 shrink-0" />
             {history.length > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-amber-400 text-black shadow-sm ring-2 ring-[#0b0c10]">
+              <span className="absolute top-1 right-1 flex items-center justify-center min-w-[16px] h-[16px] px-1 text-[10px] font-bold rounded-full bg-amber-400 text-zinc-950 ring-2 ring-[#0b0c10]">
                 {history.length}
               </span>
             )}
           </button>
 
+          {/* Divider */}
+          <div className="h-5 w-px bg-white/10 mx-0.5 hidden sm:block" />
+
           {/* Login / Profile Button */}
           {isAuthenticated && user ? (
-            <div className="relative pl-1 shrink-0" ref={dropdownRef}>
+            <div className="relative shrink-0" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#1f233a] hover:bg-[#282d4a] border border-purple-500/40 text-xs font-bold text-purple-200 transition-all cursor-pointer shadow-sm active:scale-95"
+                className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.11] border border-white/10 text-xs sm:text-sm font-semibold text-white transition-all cursor-pointer active:scale-95"
               >
                 {user.avatar ? (
                   <img
                     src={user.avatar}
                     alt={user.name || "User"}
-                    className="w-5 h-5 rounded-full object-cover"
+                    className="w-6 h-6 rounded-full object-cover"
                   />
                 ) : (
-                  <span className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500 text-white flex items-center justify-center text-[10px] font-black">
+                  <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">
                     {(user.name || user.email || "U")[0].toUpperCase()}
                   </span>
                 )}
-                <span className="max-w-[80px] sm:max-w-[120px] truncate text-white">
+                <span className="max-w-[90px] xl:max-w-[130px] truncate">
                   {user.name || user.email.split("@")[0]}
                 </span>
                 <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
               </button>
 
-              {/* Dropdown Menu */}
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#141624] border border-purple-500/30 shadow-2xl p-3 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3">
-                  <div className="px-2 py-1.5 border-b border-zinc-800">
-                    <p className="text-sm font-bold text-white truncate">
+                <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-[#13151f] border border-white/10 shadow-2xl p-2 z-50 space-y-1.5">
+                  <div className="px-2.5 py-2 border-b border-white/[0.08]">
+                    <p className="text-sm font-semibold text-white truncate">
                       {user.name || "Thành viên AniVFX"}
                     </p>
                     <p className="text-xs text-zinc-400 truncate">
@@ -395,47 +377,45 @@ export function Navbar({
                     {user.roles && user.roles.length > 0 && (
                       <div className="flex items-center gap-1 mt-1.5">
                         <Shield className="w-3 h-3 text-purple-400" />
-                        <span className="text-[10px] font-semibold text-purple-300 bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-500/30">
+                        <span className="text-[10px] font-semibold text-purple-300 bg-purple-500/15 px-1.5 py-0.5 rounded">
                           {user.roles.join(", ")}
                         </span>
                       </div>
                     )}
                   </div>
 
-                  <div className="space-y-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openDrawer("watchlist");
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white hover:bg-[#1f2238] transition text-left cursor-pointer"
-                    >
-                      <Bookmark className="w-4 h-4 text-purple-400" />
-                      <span>Danh sách của tôi ({watchlist.length})</span>
-                    </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openDrawer("watchlist");
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left cursor-pointer"
+                  >
+                    <Bookmark className="w-4 h-4 text-purple-400" />
+                    <span>Danh sách của tôi ({watchlist.length})</span>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        openDrawer("history");
-                        setUserDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white hover:bg-[#1f2238] transition text-left cursor-pointer"
-                    >
-                      <History className="w-4 h-4 text-amber-400" />
-                      <span>Lịch sử xem phim ({history.length})</span>
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openDrawer("history");
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left cursor-pointer"
+                  >
+                    <History className="w-4 h-4 text-amber-400" />
+                    <span>Lịch sử xem ({history.length})</span>
+                  </button>
 
-                  <div className="pt-2 border-t border-zinc-800">
+                  <div className="pt-1 border-t border-white/[0.08]">
                     <button
                       type="button"
                       onClick={() => {
                         logout();
                         setUserDropdownOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-bold text-rose-300 hover:bg-rose-950/40 transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-xs font-semibold text-rose-400 hover:bg-rose-500/10 transition text-left cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Đăng xuất</span>
@@ -449,15 +429,15 @@ export function Navbar({
               type="button"
               onClick={() => login()}
               disabled={isAuthLoading}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-[#7950f2] to-[#9775fa] hover:from-[#845ef7] hover:to-[#a380fc] text-white font-bold text-xs sm:text-sm shadow-md shadow-purple-600/30 hover:shadow-purple-600/50 transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-60"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs sm:text-sm shadow-sm transition-all shrink-0 cursor-pointer active:scale-95 disabled:opacity-60 whitespace-nowrap"
               title="Đăng nhập với VNTEZ IAM"
             >
               {isAuthLoading ? (
-                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin shrink-0" />
+                <Loader2 className="w-4 h-4 animate-spin shrink-0" />
               ) : (
-                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                <User className="w-4 h-4 shrink-0" />
               )}
-              <span>{isAuthLoading ? "Đang kết nối..." : "Đăng nhập"}</span>
+              <span>{isAuthLoading ? "Kết nối..." : "Đăng nhập"}</span>
             </button>
           )}
 
@@ -465,7 +445,7 @@ export function Navbar({
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 rounded-xl bg-[#1a1d2e] border border-purple-500/20 text-zinc-300 hover:text-white shrink-0 cursor-pointer"
+            className="md:hidden p-2 rounded-xl hover:bg-white/[0.08] text-zinc-200 hover:text-white shrink-0 cursor-pointer"
             aria-label="Menu"
           >
             {mobileMenuOpen ? (
@@ -479,20 +459,7 @@ export function Navbar({
 
       {/* Mobile Navigation Dropdown */}
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-purple-500/20 bg-[#0b0c10] px-4 py-3 space-y-2 animate-in slide-in-from-top-2">
-          <button
-            type="button"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              if (onSearchFocus) onSearchFocus();
-              else openSearchModal();
-            }}
-            className="w-full flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm font-bold bg-[#1a1d2e] text-purple-300 border border-purple-500/30"
-          >
-            <Search className="w-4 h-4" />
-            <span>Tìm kiếm anime...</span>
-          </button>
-
+        <div className="md:hidden border-t border-white/[0.08] bg-[#0b0c10] px-4 py-3 space-y-2.5">
           <Suspense fallback={<MobileCategoryNavFallback />}>
             <MobileCategoryNav
               activeCategory={activeCategory}
