@@ -1,3 +1,4 @@
+// Client service querying /api/jikan (AniList GraphQL adapter) with cache and local fallback
 import axios, { type AxiosError, type AxiosInstance } from "axios";
 import { CURATED_FRANCHISES, getCuratedAnimeById } from "@/services/franchises";
 import type {
@@ -21,7 +22,9 @@ import {
 
 export const jikanClient: AxiosInstance = axios.create({
   baseURL:
-    typeof window === "undefined" ? "https://api.jikan.moe/v4" : "/api/jikan",
+    typeof window === "undefined"
+      ? `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/jikan`
+      : "/api/jikan",
   timeout: 10000,
 });
 
@@ -33,7 +36,7 @@ const cache = new Map<string, CacheEntry<unknown>>();
 const inFlightRequests = new Map<string, Promise<unknown>>();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
-const MIN_REQUEST_SPACING_MS = 480;
+const MIN_REQUEST_SPACING_MS = 60;
 let lastRequestTime = 0;
 
 interface QueueItem<T> {
@@ -114,7 +117,7 @@ type MergedParams = Record<string, unknown> & {
 export async function requestWithRateLimit<T>(
   url: string,
   params?: Record<string, unknown>,
-  retries = 2,
+  retries = 1,
 ): Promise<T> {
   const mergedParams: MergedParams = { sfw: true, ...params };
   const cacheKey = getCacheKey(url, mergedParams);
@@ -176,7 +179,7 @@ export async function requestWithRateLimit<T>(
 
         if (axiosErr.response?.status === 429 && currentAttempt < retries) {
           currentAttempt++;
-          await new Promise((resolve) => setTimeout(resolve, 1200));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           continue;
         }
 
