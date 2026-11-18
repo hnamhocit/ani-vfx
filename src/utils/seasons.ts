@@ -20,23 +20,10 @@ function resolveTitle(title: { romaji?: string | null; english?: string | null; 
 
 /** So sánh để sort timeline: PREQUEL → PARENT/SIDE_STORY/SPIN_OFF → SEQUEL, cùng loại thì sort theo year */
 function compareSeasonItems(a: AnimeSeasonItem, b: AnimeSeasonItem): number {
-  const priority: Record<string, number> = {
-    PREQUEL: 0,
-    PARENT: 1,
-    SIDE_STORY: 2,
-    SPIN_OFF: 3,
-    SEQUEL: 4,
-  };
-
-  const aPriority = priority[a.relationType] ?? 5;
-  const bPriority = priority[b.relationType] ?? 5;
-
-  if (aPriority !== bPriority) return aPriority - bPriority;
-
-  // Cùng loại relation → sort theo năm phát hành
-  const aYear = a.year ?? 0;
-  const bYear = b.year ?? 0;
-  return aYear - bYear;
+  const yearA = a.year ?? 9999;
+  const yearB = b.year ?? 9999;
+  if (yearA !== yearB) return yearA - yearB;
+  return a.id - b.id;
 }
 
 export function buildAnimeSeasons(media: AniListMediaForSeasons): AnimeSeasonItem[] {

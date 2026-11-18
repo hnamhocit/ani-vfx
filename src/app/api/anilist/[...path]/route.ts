@@ -1,3 +1,4 @@
+// AniList GraphQL API Proxy Route
 import { type NextRequest, NextResponse } from "next/server";
 
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
@@ -248,17 +249,14 @@ export async function GET(
     const epMatch = targetPath.match(/^anime\/(\d+)\/episodes$/);
     if (epMatch) {
       const id = Number(epMatch[1]);
-      const page = Math.max(1, Number(searchParams.get("page") || 1));
-      const perPage = 25;
 
       const media = (await fetchMediaById(
         id,
-        `streamingEpisodes { title thumbnail url site }`,
+        `streamingEpisodes { title thumbnail }`,
       )) as {
         status?: string;
         episodes?: number | null;
         nextAiringEpisode?: { episode: number } | null;
-        averageScore?: number | null;
         streamingEpisodes?: Array<{
           title: string | null;
           thumbnail: string | null;
@@ -272,46 +270,46 @@ export async function GET(
             last_visible_page: 1,
             has_next_page: false,
             current_page: 1,
-            items: { count: 0, total: 0, per_page: perPage },
+            items: { count: 0, total: 0, per_page: 0 },
           },
         });
       }
 
       const streamed = media.streamingEpisodes || [];
-      const airedCount = media.nextAiringEpisode
-        ? Math.max(1, media.nextAiringEpisode.episode - 1)
-        : media.episodes || streamed.length || 0;
-
-      const start = (page - 1) * perPage + 1;
-      const end = Math.min(start + perPage - 1, airedCount);
-      const episodes = [];
-
-      for (let i = start; i <= end; i++) {
-        const epMeta = streamed[i - 1];
-        episodes.push({
-          id: i,
-          title: epMeta?.title || `Episode ${i}`,
-          thumbnail: epMeta?.thumbnail || null,
-          aired: null,
-          score: media.averageScore
-            ? +(media.averageScore / 10).toFixed(2)
-            : null,
-          filler: false,
-          recap: false,
-        });
+      let maxStreamedEp = 0;
+      for (const item of streamed) {
+        const match = item.title?.match(/(?:Episode|Ep\.?|Tập)\s*(\d+)/i);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxStreamedEp) maxStreamedEp = num;
+        }
       }
 
-      const lastPage = Math.ceil(airedCount / perPage) || 1;
+      const airedCount = Math.max(
+        media.nextAiringEpisode ? media.nextAiringEpisode.episode - 1 : 0,
+        media.episodes || 0,
+        maxStreamedEp,
+        streamed.length,
+      );
+
+      const episodes = Array.from({ length: airedCount }, (_, idx) => {
+        const epNum = idx + 1;
+        return {
+          id: epNum,
+          title: `Tập ${epNum}`,
+        };
+      });
+
       return NextResponse.json({
         data: episodes,
         pagination: {
-          last_visible_page: lastPage,
-          has_next_page: page < lastPage,
-          current_page: page,
+          last_visible_page: 1,
+          has_next_page: false,
+          current_page: 1,
           items: {
             count: episodes.length,
             total: airedCount,
-            per_page: perPage,
+            per_page: airedCount,
           },
         },
       });
@@ -378,26 +376,108 @@ export async function GET(
 
     const relMatch = targetPath.match(/^anime\/(\d+)\/relations$/);
     if (relMatch) {
-      const id = Number(relMatch[1]);
-      const media = await fetchMediaById(
-        id,
-        `
-        relations {
-          edges {
-            relationType
-            node {
-              ${RELATION_NODE_FIELDS}
+      const rootId = Number(relMatch[1]);
+      const ALLOWED_RELS = new Set([
+        "PREQUEL",
+        "SEQUEL",
+        "PARENT",
+        "SIDE_STORY",
+        "SPIN_OFF",
+      ]);
+
+      const visited = new Map<number, any>();
+      const collectedEdges: Array<{ relationType: string; node: any }> = [];
+      let frontier: number[] = [rootId];
+
+      for (let depth = 0; depth < 3 && frontier.length > 0; depth++) {
+        const batchQuery = `
+          query ($ids: [Int]) {
+            Page(page: 1, perPage: 50) {
+              media(id_in: $ids, type: ANIME) {
+                ${RELATION_NODE_FIELDS}
+                relations {
+                  edges {
+                    relationType
+                    node {
+                      ${RELATION_NODE_FIELDS}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        `;
+
+        const batchData = await queryAniList<{
+          Page?: { media?: any[] };
+        }>(batchQuery, { ids: frontier });
+
+        const mediaList = batchData?.Page?.media || [];
+        const nextFrontier: number[] = [];
+
+        for (const m of mediaList) {
+          if (!visited.has(m.id)) {
+            visited.set(m.id, m);
+          }
+
+          for (const edge of m.relations?.edges || []) {
+            const relType = edge.relationType;
+            const target = edge.node;
+            if (!target || target.type !== "ANIME" || !ALLOWED_RELS.has(relType)) {
+              continue;
+            }
+
+            if (!visited.has(target.id)) {
+              visited.set(target.id, target);
+              if (
+                relType === "PREQUEL" ||
+                relType === "SEQUEL" ||
+                relType === "PARENT"
+              ) {
+                nextFrontier.push(target.id);
+              }
+            }
+
+            if (target.id !== rootId) {
+              collectedEdges.push({
+                relationType: relType,
+                node: target,
+              });
             }
           }
         }
-        `,
-      );
 
-      if (!media) {
+        frontier = Array.from(new Set(nextFrontier));
+      }
+
+      const rootMedia = visited.get(rootId);
+      if (!rootMedia) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
       }
 
-      return NextResponse.json({ data: media });
+      const uniqueMap = new Map<number, { relationType: string; node: any }>();
+      for (const item of collectedEdges) {
+        if (!uniqueMap.has(item.node.id)) {
+          uniqueMap.set(item.node.id, item);
+        }
+      }
+
+      const sortedEdges = Array.from(uniqueMap.values()).sort((a, b) => {
+        const yearA = a.node.seasonYear ?? a.node.startDate?.year ?? 9999;
+        const yearB = b.node.seasonYear ?? b.node.startDate?.year ?? 9999;
+        if (yearA !== yearB) return yearA - yearB;
+        return a.node.id - b.node.id;
+      });
+
+      return NextResponse.json({
+        data: {
+          id: rootMedia.id,
+          title: rootMedia.title,
+          format: rootMedia.format,
+          seasonYear: rootMedia.seasonYear,
+          relations: { edges: sortedEdges },
+        },
+      });
     }
 
     return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -4,7 +4,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef } from "react";
-import { CustomVideoPlayer } from "@/components/CustomVideoPlayer";
+import { CustomVideoPlayer } from "@/components/player/CustomVideoPlayer";
 import { buildAnimeSeasons } from "@/utils/seasons";
 import { useUserStore } from "@/store/useUserStore";
 import { formatSeconds, useWatchStore } from "@/store/useWatchStore";
