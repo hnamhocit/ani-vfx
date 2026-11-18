@@ -55,6 +55,10 @@ interface UserState {
   getProgress: (animeId: number, epNumber: number) => EpisodeProgress | null;
   markWatched: (animeId: number, epNumber: number) => void;
   isWatched: (animeId: number, epNumber: number) => boolean;
+  getWatchedEpisodesForAnime: (animeId: number) => number[];
+  getLatestEpisodeProgress: (
+    animeId: number,
+  ) => { episode: number; progress: EpisodeProgress } | null;
 }
 
 export const useUserStore = create<UserState>()(
@@ -140,9 +144,9 @@ export const useUserStore = create<UserState>()(
           try {
             vntez.auth.signOut(
               redirectUrl ||
-                (typeof window !== "undefined"
-                  ? window.location.origin
-                  : undefined),
+              (typeof window !== "undefined"
+                ? window.location.origin
+                : undefined),
             );
           } catch {
             // Ignored
@@ -218,6 +222,32 @@ export const useUserStore = create<UserState>()(
             },
           },
         }));
+      },
+
+      getWatchedEpisodesForAnime: (animeId: number) => {
+        const prefix = `${animeId}_`;
+        const result: number[] = [];
+        for (const [key, prog] of Object.entries(get().watchProgress)) {
+          if (key.startsWith(prefix) && (prog.completed || prog.percentage >= 85)) {
+            const ep = Number(key.slice(prefix.length));
+            if (!Number.isNaN(ep)) result.push(ep);
+          }
+        }
+        return result.sort((a, b) => a - b);
+      },
+
+      getLatestEpisodeProgress: (animeId: number) => {
+        const prefix = `${animeId}_`;
+        let latest: { episode: number; progress: EpisodeProgress } | null = null;
+        for (const [key, prog] of Object.entries(get().watchProgress)) {
+          if (!key.startsWith(prefix)) continue;
+          const ep = Number(key.slice(prefix.length));
+          if (Number.isNaN(ep)) continue;
+          if (!latest || prog.updatedAt > latest.progress.updatedAt) {
+            latest = { episode: ep, progress: prog };
+          }
+        }
+        return latest;
       },
     }),
     {

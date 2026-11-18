@@ -7,6 +7,7 @@ import {
   Compass,
   Flame,
   History,
+  Library,
   Loader2,
   LogOut,
   Menu,
@@ -19,7 +20,7 @@ import {
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useAnimeApp } from "@/context/AnimeAppContext";
+import { useAnimeAppStore } from "@/store/useAnimeAppStore";
 import { useUserStore } from "@/store/useUserStore";
 
 const NAV_ITEMS = [
@@ -87,7 +88,7 @@ function DesktopCategoryNav({
     <nav className="hidden md:flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/[0.07] shrink-0">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const isActive = currentCategory === item.id;
+        const isActive = pathname === "/" && currentCategory === item.id;
         return (
           <button
             key={item.id}
@@ -113,21 +114,14 @@ function DesktopCategoryNav({
 function DesktopCategoryNavFallback() {
   return (
     <nav className="hidden md:flex items-center gap-1 bg-white/[0.03] p-1 rounded-xl border border-white/[0.07] shrink-0">
-      {NAV_ITEMS.map((item, idx) => {
+      {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const isActive = idx === 0;
         return (
           <div
             key={item.id}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap ${isActive
-                ? "bg-white/10 text-white font-semibold"
-                : "text-zinc-300 font-medium"
-              }`}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm whitespace-nowrap text-zinc-300 font-medium"
           >
-            <Icon
-              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
-                }`}
-            />
+            <Icon className="w-4 h-4 shrink-0 text-zinc-400" />
             <span>{item.label}</span>
           </div>
         );
@@ -175,7 +169,7 @@ function MobileCategoryNav({
     <div className="grid grid-cols-2 gap-1.5 pt-1">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
-        const isActive = currentCategory === item.id;
+        const isActive = pathname === "/" && currentCategory === item.id;
         return (
           <button
             key={item.id}
@@ -198,30 +192,6 @@ function MobileCategoryNav({
   );
 }
 
-function MobileCategoryNavFallback() {
-  return (
-    <div className="grid grid-cols-2 gap-1.5 pt-1">
-      {NAV_ITEMS.map((item, idx) => {
-        const Icon = item.icon;
-        const isActive = idx === 0;
-        return (
-          <div
-            key={item.id}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-sm ${isActive ? "bg-white/10 text-white font-semibold" : "text-zinc-300"
-              }`}
-          >
-            <Icon
-              className={`w-4 h-4 shrink-0 ${isActive ? item.activeColor : "text-zinc-400"
-                }`}
-            />
-            <span>{item.label}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export interface NavbarProps {
   onSearchFocus?: () => void;
   onSelectCategory?: (category: "now" | "popular" | "upcoming") => void;
@@ -233,7 +203,11 @@ export function Navbar({
   onSelectCategory,
   activeCategory,
 }: NavbarProps) {
-  const { watchlist, history, openDrawer, openSearchModal } = useAnimeApp();
+  const pathname = usePathname();
+  const watchlist = useAnimeAppStore((s) => s.watchlist);
+  const history = useAnimeAppStore((s) => s.history);
+  const openSearchModal = useAnimeAppStore((s) => s.openSearchModal);
+
   const {
     user,
     isAuthenticated,
@@ -263,6 +237,9 @@ export function Navbar({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const isLibraryActive = pathname === "/library";
+  const libraryCount = watchlist.length + history.length;
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#0b0c10]/85 backdrop-blur-xl select-none">
       <div className="max-w-[1440px] mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3">
@@ -287,7 +264,7 @@ export function Navbar({
           />
         </Suspense>
 
-        <div className="flex items-center gap-1 sm:gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <button
             type="button"
             onClick={() =>
@@ -304,35 +281,22 @@ export function Navbar({
             </kbd>
           </button>
 
-          <button
-            type="button"
-            onClick={() => openDrawer("watchlist")}
-            className="relative p-2 sm:p-2.5 rounded-xl hover:bg-white/[0.08] text-zinc-300 hover:text-white transition-all shrink-0 cursor-pointer active:scale-95"
-            title="Danh sách theo dõi"
-            aria-label="Danh sách theo dõi"
+          <Link
+            href="/library"
+            className={`relative flex items-center gap-1.5 px-2.5 py-2 sm:px-3 sm:py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shrink-0 ${isLibraryActive
+                ? "bg-purple-600/20 text-white border-purple-400/50"
+                : "bg-white/[0.04] hover:bg-white/[0.09] text-zinc-200 border-white/[0.08]"
+              }`}
+            title="Thư viện cá nhân"
           >
-            <Bookmark className="w-[18px] h-[18px] text-purple-400 shrink-0" />
-            {watchlist.length > 0 && (
-              <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 flex items-center justify-center min-w-[15px] h-[15px] sm:min-w-[16px] sm:h-[16px] px-1 text-[10px] font-bold rounded-full bg-purple-500 text-white ring-2 ring-[#0b0c10]">
-                {watchlist.length}
+            <Library className="w-4 h-4 text-purple-400 shrink-0" />
+            <span className="hidden sm:inline">Thư viện</span>
+            {libraryCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                {libraryCount}
               </span>
             )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openDrawer("history")}
-            className="relative p-2 sm:p-2.5 rounded-xl hover:bg-white/[0.08] text-zinc-300 hover:text-white transition-all shrink-0 cursor-pointer active:scale-95"
-            title="Lịch sử xem"
-            aria-label="Lịch sử xem"
-          >
-            <History className="w-[18px] h-[18px] text-amber-400 shrink-0" />
-            {history.length > 0 && (
-              <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 flex items-center justify-center min-w-[15px] h-[15px] sm:min-w-[16px] sm:h-[16px] px-1 text-[10px] font-bold rounded-full bg-amber-400 text-zinc-950 ring-2 ring-[#0b0c10]">
-                {history.length}
-              </span>
-            )}
-          </button>
+          </Link>
 
           <div className="h-5 w-px bg-white/10 mx-0.5 hidden sm:block" />
 
@@ -380,29 +344,23 @@ export function Navbar({
                     )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openDrawer("watchlist");
-                      setUserDropdownOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left cursor-pointer"
+                  <Link
+                    href="/library?tab=watchlist"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left"
                   >
                     <Bookmark className="w-4 h-4 text-purple-400" />
                     <span>Danh sách của tôi ({watchlist.length})</span>
-                  </button>
+                  </Link>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      openDrawer("history");
-                      setUserDropdownOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left cursor-pointer"
+                  <Link
+                    href="/library?tab=history"
+                    onClick={() => setUserDropdownOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-xs font-medium text-zinc-200 hover:text-white hover:bg-white/[0.07] transition text-left"
                   >
                     <History className="w-4 h-4 text-amber-400" />
                     <span>Lịch sử xem ({history.length})</span>
-                  </button>
+                  </Link>
 
                   <div className="pt-1 border-t border-white/[0.08]">
                     <button
@@ -454,7 +412,7 @@ export function Navbar({
 
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-white/[0.08] bg-[#0b0c10] px-4 py-3 space-y-2.5">
-          <Suspense fallback={<MobileCategoryNavFallback />}>
+          <Suspense fallback={<div className="h-10" />}>
             <MobileCategoryNav
               activeCategory={activeCategory}
               onSelectCategory={onSelectCategory}

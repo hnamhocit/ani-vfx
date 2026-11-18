@@ -152,8 +152,8 @@ export function SeasonGrid({
               key={season.id}
               href={targetHref}
               className={`flex flex-col justify-between gap-2.5 p-3.5 rounded-2xl border transition-all min-h-[104px] w-full ${isCurrent
-                  ? "bg-purple-950/80 border-purple-400 ring-2 ring-purple-400/50 text-white shadow-lg shadow-purple-600/30"
-                  : "bg-[#181a28] hover:bg-[#222538] border-purple-500/20 text-zinc-300 hover:text-white hover:border-purple-400/60"
+                ? "bg-purple-950/80 border-purple-400 ring-2 ring-purple-400/50 text-white shadow-lg shadow-purple-600/30"
+                : "bg-[#181a28] hover:bg-[#222538] border-purple-500/20 text-zinc-300 hover:text-white hover:border-purple-400/60"
                 }`}
             >
               <div className="flex items-start justify-between gap-2">
