@@ -1,7 +1,50 @@
+// Dynamic sitemap powered by AniList GraphQL
 import type { MetadataRoute } from "next";
-import { MOCK_ANIMES } from "@/services/mockData";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+const ANILIST_ENDPOINT = "https://graphql.anilist.co";
+
+async function fetchTopAniListIds(): Promise<number[]> {
+  const query = `
+    query {
+      trending: Page(page: 1, perPage: 30) {
+        media(type: ANIME, isAdult: false, sort: [TRENDING_DESC]) {
+          id
+        }
+      }
+      popular: Page(page: 1, perPage: 30) {
+        media(type: ANIME, isAdult: false, sort: [POPULARITY_DESC]) {
+          id
+        }
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ query }),
+      next: { revalidate: 86400 },
+    });
+
+    if (!res.ok) return [];
+    const json = await res.json();
+
+    const trendingIds: number[] =
+      json?.data?.trending?.media?.map((m: { id: number }) => m.id) || [];
+    const popularIds: number[] =
+      json?.data?.popular?.media?.map((m: { id: number }) => m.id) || [];
+
+    return Array.from(new Set([...trendingIds, ...popularIds]));
+  } catch {
+    return [];
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl =
     process.env.NEXT_PUBLIC_SITE_URL || "https://hnamhocit.vercel.app";
   const now = new Date();
@@ -33,15 +76,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  const animeRoutes: MetadataRoute.Sitemap = MOCK_ANIMES.map((anime) => ({
-    url: `${baseUrl}/anime/${anime.mal_id}`,
+  const animeIds = await fetchTopAniListIds();
+
+  const animeRoutes: MetadataRoute.Sitemap = animeIds.map((id) => ({
+    url: `${baseUrl}/anime/${id}`,
     lastModified: now,
     changeFrequency: "weekly",
     priority: 0.8,
   }));
 
-  const watchRoutes: MetadataRoute.Sitemap = MOCK_ANIMES.map((anime) => ({
-    url: `${baseUrl}/anime/${anime.mal_id}/watch?ep=1`,
+  const watchRoutes: MetadataRoute.Sitemap = animeIds.map((id) => ({
+    url: `${baseUrl}/anime/${id}/watch?ep=1`,
     lastModified: now,
     changeFrequency: "weekly",
     priority: 0.7,

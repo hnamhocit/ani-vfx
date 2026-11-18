@@ -39,7 +39,10 @@ export function WatchSidebar() {
       .map((entry) =>
         "mediaRecommendation" in entry ? entry.mediaRecommendation : entry,
       )
-      .filter((rec): rec is RawRecMedia => Boolean(rec?.id && rec.id !== animeId))
+      .filter(
+        (rec): rec is RawRecMedia =>
+          Boolean(rec && "id" in rec && rec.id !== animeId),
+      )
       .map((rec) => ({
         id: rec.id,
         title: rec.title?.english || rec.title?.romaji || "Unknown",
