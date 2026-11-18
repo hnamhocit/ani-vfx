@@ -1,20 +1,14 @@
 import { create } from "zustand";
-import { jikanApi } from "@/services/jikan";
-import type {
-  Anime,
-  AnimeCharacterItem,
-  AnimeEpisode,
-  AnimeRecommendationItem,
-  AnimeRelationItem,
-} from "@/types/anime";
+import { anilistApi } from "@/services/anilist";
+import type { AniListMediaForSeasons } from "@/types/anilist";
 
 interface DetailState {
   animeId: number | null;
-  anime: Anime | null;
-  episodes: AnimeEpisode[];
-  characters: AnimeCharacterItem[];
-  recommendations: AnimeRecommendationItem[];
-  relations: AnimeRelationItem[];
+  anime: unknown | null;
+  episodes: unknown[];
+  characters: unknown;
+  recommendations: unknown;
+  relations: AniListMediaForSeasons | null;
 
   episodePage: number;
   totalEpisodePages: number;
@@ -26,10 +20,7 @@ interface DetailState {
   episodesLoading: boolean;
   error: string | null;
 
-  fetchDetailData: (
-    id: number,
-    addToHistory: (anime: Anime) => void,
-  ) => Promise<void>;
+  fetchDetailData: (id: number, addToHistory: (anime: any) => void) => Promise<void>;
   fetchEpisodes: (id: number, page: number) => Promise<void>;
   setEpisodePage: (page: number | ((prev: number) => number)) => void;
   setEpisodeViewMode: (mode: "grid" | "list") => void;
@@ -40,89 +31,64 @@ export const useDetailStore = create<DetailState>((set, get) => ({
   animeId: null,
   anime: null,
   episodes: [],
-  characters: [],
-  recommendations: [],
-  relations: [],
-
+  characters: null,
+  recommendations: null,
+  relations: null,
   episodePage: 1,
   totalEpisodePages: 1,
   totalEpisodesCount: 0,
   episodeViewMode: "grid",
   episodeSearch: "",
-
   isLoading: true,
   episodesLoading: false,
   error: null,
 
   fetchDetailData: async (id, addToHistory) => {
     set({
-      animeId: id,
-      anime: null,
-      episodes: [],
-      characters: [],
-      recommendations: [],
-      relations: [],
-      episodePage: 1,
-      totalEpisodePages: 1,
-      totalEpisodesCount: 0,
-      episodeSearch: "",
-      isLoading: true,
-      error: null,
+      animeId: id, anime: null, episodes: [], characters: null,
+      recommendations: null, relations: null,
+      episodePage: 1, totalEpisodePages: 1, totalEpisodesCount: 0,
+      episodeSearch: "", isLoading: true, error: null,
     });
 
     try {
       const [animeRes, charsRes, recsRes, relsRes] = await Promise.allSettled([
-        jikanApi.getAnimeFull(id),
-        jikanApi.getAnimeCharacters(id),
-        jikanApi.getAnimeRecommendations(id),
-        jikanApi.getAnimeRelations(id),
+        anilistApi.getAnimeFull(id),
+        anilistApi.getAnimeCharacters(id),
+        anilistApi.getAnimeRecommendations(id),
+        anilistApi.getAnimeRelations(id),
       ]);
 
       if (get().animeId !== id) return;
 
       if (animeRes.status === "fulfilled" && animeRes.value.data) {
-        const animeData = animeRes.value.data;
-        addToHistory(animeData);
-        set({ anime: animeData });
+        addToHistory(animeRes.value.data);
+        set({ anime: animeRes.value.data });
       } else {
         set({ error: "Không tìm thấy thông tin anime này." });
       }
 
       set({
-        characters:
-          charsRes.status === "fulfilled" && charsRes.value.data
-            ? charsRes.value.data
-            : [],
-        recommendations:
-          recsRes.status === "fulfilled" && recsRes.value.data
-            ? recsRes.value.data
-            : [],
-        relations:
-          relsRes.status === "fulfilled" && relsRes.value.data
-            ? relsRes.value.data
-            : [],
+        characters: charsRes.status === "fulfilled" ? charsRes.value.data : null,
+        recommendations: recsRes.status === "fulfilled" ? recsRes.value.data : null,
+        relations: relsRes.status === "fulfilled" ? relsRes.value.data : null,
         isLoading: false,
       });
     } catch {
       if (get().animeId !== id) return;
-      set({
-        error: "Lỗi khi tải thông tin anime. Vui lòng thử lại.",
-        isLoading: false,
-      });
+      set({ error: "Không có kết nối mạng. Vui lòng thử lại.", isLoading: false });
     }
   },
 
   fetchEpisodes: async (id, page) => {
     set({ episodesLoading: true });
     try {
-      const res = await jikanApi.getAnimeEpisodes(id, page);
+      const res = await anilistApi.getAnimeEpisodes(id, page);
       if (get().animeId !== id || get().episodePage !== page) return;
-
       set({
         episodes: res.data || [],
         totalEpisodePages: res.pagination?.last_visible_page || 1,
-        totalEpisodesCount:
-          res.pagination?.items?.total || res.data?.length || 0,
+        totalEpisodesCount: res.pagination?.items?.total || (res.data as any[])?.length || 0,
         episodesLoading: false,
       });
     } catch {
@@ -132,11 +98,7 @@ export const useDetailStore = create<DetailState>((set, get) => ({
   },
 
   setEpisodePage: (page) =>
-    set((state) => ({
-      episodePage: typeof page === "function" ? page(state.episodePage) : page,
-    })),
-
+    set((s) => ({ episodePage: typeof page === "function" ? page(s.episodePage) : page })),
   setEpisodeViewMode: (mode) => set({ episodeViewMode: mode }),
-
   setEpisodeSearch: (query) => set({ episodeSearch: query }),
 }));

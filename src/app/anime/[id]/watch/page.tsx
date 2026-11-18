@@ -1,7 +1,27 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { MOCK_ANIMES } from "@/services/mockData";
 import { AnimeWatchClient } from "./AnimeWatchClient";
+
+const ANILIST_ENDPOINT = "https://graphql.anilist.co";
+
+async function fetchAnimeMeta(id: number) {
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `query ($id: Int) { Media(id: $id, type: ANIME) { id title { romaji english native } coverImage { extraLarge large } } }`,
+        variables: { id },
+      }),
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.data?.Media ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export async function generateMetadata({
   params,
@@ -14,28 +34,17 @@ export async function generateMetadata({
   const sp = await searchParams;
   const ep = typeof sp.ep === "string" ? parseInt(sp.ep, 10) : 1;
   const numId = Number(id);
-  const anime = MOCK_ANIMES.find((a) => a.mal_id === numId);
-  const title = anime?.title_english || anime?.title || `Anime #${id}`;
-  const desc = `Xem ${title} Tập ${ep} Vietsub Full HD với tốc độ cao, trình phát video thông minh trên AniVFX.`;
-  const img =
-    anime?.images.webp?.large_image_url ||
-    anime?.images.jpg?.large_image_url ||
-    "/og-image.png";
+  const media = await fetchAnimeMeta(numId);
+
+  const title = media?.title?.english || media?.title?.romaji || `Anime #${id}`;
+  const desc = `Xem ${title} Tập ${ep} Vietsub Full HD với tốc độ cao, trình phát video thông minh.`;
+  const img = media?.coverImage?.extraLarge || media?.coverImage?.large || "/og-image.png";
 
   return {
     title: `${title} Tập ${ep} Vietsub Full HD`,
     description: desc,
-    openGraph: {
-      title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`,
-      description: desc,
-      images: [{ url: img, alt: `${title} Tập ${ep}` }],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`,
-      description: desc,
-      images: [img],
-    },
+    openGraph: { title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`, description: desc, images: [{ url: img, alt: `${title} Tập ${ep}` }] },
+    twitter: { card: "summary_large_image", title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`, description: desc, images: [img] },
   };
 }
 

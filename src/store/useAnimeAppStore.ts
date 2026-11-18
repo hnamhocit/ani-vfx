@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { Anime, SavedAnimeItem } from "@/types/anime";
 
 export interface TrailerModalState {
   isOpen: boolean;
@@ -8,37 +7,89 @@ export interface TrailerModalState {
   embedUrl?: string | null;
 }
 
+export interface SavedAnimeItem {
+  id: number;
+  title: string;
+  titleEnglish?: string | null;
+  coverImage: string;
+  score?: number | null;
+  format?: string | null;
+  year?: number | null;
+  episodes?: number | null;
+  timestamp: number;
+}
+
+export interface AnimeInput {
+  id: number;
+  title?: {
+    romaji?: string | null;
+    english?: string | null;
+    native?: string | null;
+  };
+  coverImage?: {
+    extraLarge?: string | null;
+    large?: string | null;
+  };
+  averageScore?: number | null;
+  format?: string | null;
+  seasonYear?: number | null;
+  episodes?: number | null;
+}
+
 const STORAGE_KEYS = {
-  WATCHLIST: "mal_watchlist_v1",
-  HISTORY: "mal_history_v1",
-  WATCHED_EPISODES: "mal_watched_episodes_v1",
+  WATCHLIST: "anilist_watchlist_v1",
+  HISTORY: "anilist_history_v1",
+  WATCHED_EPISODES: "anilist_watched_episodes_v1",
 };
 
-function toSavedItem(anime: Anime | SavedAnimeItem): SavedAnimeItem {
-  if ("timestamp" in anime) {
+function toSavedItem(anime: AnimeInput | SavedAnimeItem): SavedAnimeItem {
+  if ("timestamp" in anime && typeof anime.coverImage === "string") {
     return { ...anime, timestamp: Date.now() };
   }
+  const a = anime as AnimeInput;
   return {
-    mal_id: anime.mal_id,
-    title: anime.title,
-    title_english: anime.title_english,
-    image_url:
-      anime.images.webp?.large_image_url ||
-      anime.images.jpg?.large_image_url ||
-      anime.images.jpg?.image_url,
-    score: anime.score,
-    type: anime.type,
-    year: anime.year,
-    episodes: anime.episodes,
+    id: a.id,
+    title: a.title?.romaji || a.title?.english || "Unknown",
+    titleEnglish: a.title?.english ?? null,
+    coverImage: a.coverImage?.extraLarge || a.coverImage?.large || "",
+    score: a.averageScore ? +(a.averageScore / 10).toFixed(2) : null,
+    format: a.format ?? null,
+    year: a.seasonYear ?? null,
+    episodes: a.episodes ?? null,
     timestamp: Date.now(),
   };
 }
 
 function persistStorage(key: string, value: unknown) {
   if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch { }
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { }
+}
+
+// One-time migration từ key cũ mal_* sang anilist_*
+function migrateOldKeys() {
+  if (typeof window === "undefined") return;
+  const map: Record<string, string> = {
+    mal_watchlist_v1: STORAGE_KEYS.WATCHLIST,
+    mal_history_v1: STORAGE_KEYS.HISTORY,
+    mal_watched_episodes_v1: STORAGE_KEYS.WATCHED_EPISODES,
+  };
+  for (const [oldKey, newKey] of Object.entries(map)) {
+    const raw = localStorage.getItem(oldKey);
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(raw);
+      const migrated = Array.isArray(parsed)
+        ? parsed.map((item: any) => ({
+          ...item,
+          id: item.id ?? item.mal_id,
+          coverImage: item.coverImage ?? item.image_url ?? "",
+          titleEnglish: item.titleEnglish ?? item.title_english,
+        }))
+        : parsed;
+      localStorage.setItem(newKey, JSON.stringify(migrated));
+    } catch { }
+    localStorage.removeItem(oldKey);
+  }
 }
 
 interface AnimeAppState {
@@ -53,32 +104,22 @@ interface AnimeAppState {
   isSearchModalOpen: boolean;
 
   hydrateFromStorage: () => void;
-
-  isBookmarked: (mal_id: number) => boolean;
-  toggleBookmark: (anime: Anime | SavedAnimeItem) => void;
-  removeFromWatchlist: (mal_id: number) => void;
-
-  addToHistory: (anime: Anime | SavedAnimeItem) => void;
-  removeFromHistory: (mal_id: number) => void;
+  isBookmarked: (id: number) => boolean;
+  toggleBookmark: (anime: AnimeInput | SavedAnimeItem) => void;
+  removeFromWatchlist: (id: number) => void;
+  addToHistory: (anime: AnimeInput | SavedAnimeItem) => void;
+  removeFromHistory: (id: number) => void;
   clearHistory: () => void;
-
   isEpisodeWatched: (animeId: number, epNumber: number) => boolean;
   toggleEpisodeWatched: (animeId: number, epNumber: number) => void;
   markAllEpisodesWatched: (animeId: number, epNumbers: number[]) => void;
   unmarkAllEpisodesWatched: (animeId: number) => void;
   getWatchedCount: (animeId: number) => number;
-
   openDrawer: (initialTab?: "watchlist" | "history") => void;
   closeDrawer: () => void;
   setDrawerTab: (tab: "watchlist" | "history") => void;
-
-  openTrailerModal: (
-    title: string,
-    youtubeId?: string | null,
-    embedUrl?: string | null,
-  ) => void;
+  openTrailerModal: (title: string, youtubeId?: string | null, embedUrl?: string | null) => void;
   closeTrailerModal: () => void;
-
   openSearchModal: () => void;
   closeSearchModal: () => void;
   toggleSearchModal: () => void;
@@ -89,28 +130,19 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
   history: [],
   watchedEpisodes: {},
   isHydrated: false,
-
   isDrawerOpen: false,
   drawerTab: "watchlist",
-  trailerModal: {
-    isOpen: false,
-    title: "",
-    youtubeId: null,
-    embedUrl: null,
-  },
+  trailerModal: { isOpen: false, title: "", youtubeId: null, embedUrl: null },
   isSearchModalOpen: false,
 
   hydrateFromStorage: () => {
     if (typeof window === "undefined" || get().isHydrated) return;
+    migrateOldKeys();
     try {
-      const savedWatchlist = localStorage.getItem(STORAGE_KEYS.WATCHLIST);
-      const savedHistory = localStorage.getItem(STORAGE_KEYS.HISTORY);
-      const savedWatched = localStorage.getItem(STORAGE_KEYS.WATCHED_EPISODES);
-
       set({
-        watchlist: savedWatchlist ? JSON.parse(savedWatchlist) : [],
-        history: savedHistory ? JSON.parse(savedHistory) : [],
-        watchedEpisodes: savedWatched ? JSON.parse(savedWatched) : {},
+        watchlist: JSON.parse(localStorage.getItem(STORAGE_KEYS.WATCHLIST) || "[]"),
+        history: JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"),
+        watchedEpisodes: JSON.parse(localStorage.getItem(STORAGE_KEYS.WATCHED_EPISODES) || "{}"),
         isHydrated: true,
       });
     } catch {
@@ -118,27 +150,22 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
     }
   },
 
-  isBookmarked: (mal_id) =>
-    get().watchlist.some((item) => item.mal_id === mal_id),
+  isBookmarked: (id) => get().watchlist.some((item) => item.id === id),
 
   toggleBookmark: (anime) =>
     set((state) => {
-      const exists = state.watchlist.some(
-        (item) => item.mal_id === anime.mal_id,
-      );
+      const item = toSavedItem(anime);
+      const exists = state.watchlist.some((w) => w.id === item.id);
       const updated = exists
-        ? state.watchlist.filter((item) => item.mal_id !== anime.mal_id)
-        : [
-          toSavedItem(anime),
-          ...state.watchlist.filter((w) => w.mal_id !== anime.mal_id),
-        ];
+        ? state.watchlist.filter((w) => w.id !== item.id)
+        : [item, ...state.watchlist.filter((w) => w.id !== item.id)];
       persistStorage(STORAGE_KEYS.WATCHLIST, updated);
       return { watchlist: updated };
     }),
 
-  removeFromWatchlist: (mal_id) =>
+  removeFromWatchlist: (id) =>
     set((state) => {
-      const updated = state.watchlist.filter((item) => item.mal_id !== mal_id);
+      const updated = state.watchlist.filter((item) => item.id !== id);
       persistStorage(STORAGE_KEYS.WATCHLIST, updated);
       return { watchlist: updated };
     }),
@@ -146,17 +173,14 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
   addToHistory: (anime) =>
     set((state) => {
       const item = toSavedItem(anime);
-      const updated = [
-        item,
-        ...state.history.filter((h) => h.mal_id !== anime.mal_id),
-      ].slice(0, 30);
+      const updated = [item, ...state.history.filter((h) => h.id !== item.id)].slice(0, 30);
       persistStorage(STORAGE_KEYS.HISTORY, updated);
       return { history: updated };
     }),
 
-  removeFromHistory: (mal_id) =>
+  removeFromHistory: (id) =>
     set((state) => {
-      const updated = state.history.filter((item) => item.mal_id !== mal_id);
+      const updated = state.history.filter((item) => item.id !== id);
       persistStorage(STORAGE_KEYS.HISTORY, updated);
       return { history: updated };
     }),
@@ -172,9 +196,8 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
   toggleEpisodeWatched: (animeId, epNumber) =>
     set((state) => {
       const current = state.watchedEpisodes[animeId] || [];
-      const exists = current.includes(epNumber);
-      const updated = exists
-        ? current.filter((num) => num !== epNumber)
+      const updated = current.includes(epNumber)
+        ? current.filter((n) => n !== epNumber)
         : [...current, epNumber];
       const next = { ...state.watchedEpisodes, [animeId]: updated };
       persistStorage(STORAGE_KEYS.WATCHED_EPISODES, next);
@@ -185,9 +208,7 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
     set((state) => {
       const next = {
         ...state.watchedEpisodes,
-        [animeId]: Array.from(
-          new Set([...(state.watchedEpisodes[animeId] || []), ...epNumbers]),
-        ),
+        [animeId]: Array.from(new Set([...(state.watchedEpisodes[animeId] || []), ...epNumbers])),
       };
       persistStorage(STORAGE_KEYS.WATCHED_EPISODES, next);
       return { watchedEpisodes: next };
@@ -203,37 +224,16 @@ export const useAnimeAppStore = create<AnimeAppState>((set, get) => ({
 
   getWatchedCount: (animeId) => get().watchedEpisodes[animeId]?.length || 0,
 
-  openDrawer: (initialTab = "watchlist") =>
-    set({ drawerTab: initialTab, isDrawerOpen: true }),
-
+  openDrawer: (initialTab = "watchlist") => set({ drawerTab: initialTab, isDrawerOpen: true }),
   closeDrawer: () => set({ isDrawerOpen: false }),
-
   setDrawerTab: (tab) => set({ drawerTab: tab }),
 
   openTrailerModal: (title, youtubeId = null, embedUrl = null) =>
-    set({
-      trailerModal: {
-        isOpen: true,
-        title,
-        youtubeId,
-        embedUrl,
-      },
-    }),
-
+    set({ trailerModal: { isOpen: true, title, youtubeId, embedUrl } }),
   closeTrailerModal: () =>
-    set({
-      trailerModal: {
-        isOpen: false,
-        title: "",
-        youtubeId: null,
-        embedUrl: null,
-      },
-    }),
+    set({ trailerModal: { isOpen: false, title: "", youtubeId: null, embedUrl: null } }),
 
   openSearchModal: () => set({ isSearchModalOpen: true }),
-
   closeSearchModal: () => set({ isSearchModalOpen: false }),
-
-  toggleSearchModal: () =>
-    set((state) => ({ isSearchModalOpen: !state.isSearchModalOpen })),
+  toggleSearchModal: () => set((s) => ({ isSearchModalOpen: !s.isSearchModalOpen })),
 }));

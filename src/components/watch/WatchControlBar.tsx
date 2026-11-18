@@ -1,8 +1,19 @@
+"use client";
+
 import { ChevronLeft, ChevronRight, Clock, Film, Play } from "lucide-react";
 import { useWatchStore } from "@/store/useWatchStore";
 
+interface WatchControlBarAnime {
+  status?: string | null;
+  episodes?: number | null;
+  trailer?: {
+    id?: string | null;
+    site?: string | null;
+  } | null;
+}
+
 export function WatchControlBar() {
-  const anime = useWatchStore((s) => s.anime);
+  const anime = useWatchStore((s) => s.anime) as WatchControlBarAnime | null;
   const episodes = useWatchStore((s) => s.episodes);
   const currentEpisode = useWatchStore((s) => s.currentEpisode);
   const streamServers = useWatchStore((s) => s.streamServers);
@@ -18,13 +29,13 @@ export function WatchControlBar() {
   if (!anime) return null;
 
   const isUpcoming =
-    anime.status === "Not yet aired" ||
+    anime.status === "NOT_YET_RELEASED" ||
     (episodes.length === 0 && (!anime.episodes || anime.episodes === 0));
   const totalEpisodes = isUpcoming
     ? 0
     : episodes.length || anime.episodes || 0;
   const hasTrailer = Boolean(
-    anime.trailer?.embed_url || anime.trailer?.youtube_id,
+    anime.trailer?.site === "youtube" && anime.trailer?.id,
   );
 
   return (

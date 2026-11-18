@@ -1,93 +1,223 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import type { StreamResponse, StreamServer } from "@/types/anime";
+// Stream Source Resolver with AniList metadata scoring to avoid wrong specials/parodies
+import { type NextRequest, NextResponse } from "next/server";
+import type { StreamResponse, StreamServer } from "@/types/stream";
 
-// In-memory cache for anime movie details (slug -> episode servers)
-interface CacheEntry {
-  movieName: string;
-  slug: string;
-  episodes: Array<{
-    server_name: string;
-    server_data: Array<{
-      name: string;
-      slug: string;
-      filename: string;
-      link_embed: string;
-      link_m3u8: string;
-    }>;
-  }>;
-  timestamp: number;
+const ANILIST_ENDPOINT = "https://graphql.anilist.co";
+const CONSUMET_API_URL = process.env.CONSUMET_API_URL?.replace(/\/$/, "");
+
+interface AnimeMeta {
+  romaji: string | null;
+  english: string | null;
+  native: string | null;
+  episodes: number | null;
+  format: string | null;
+  seasonYear: number | null;
 }
 
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+async function fetchAnimeMeta(anilistId: number): Promise<AnimeMeta | null> {
+  const query = `
+    query ($id: Int) {
+      Media(id: $id, type: ANIME) {
+        title { romaji english native }
+        episodes
+        format
+        seasonYear
+      }
+    }
+  `;
+
+  try {
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables: { id: anilistId } }),
+      next: { revalidate: 3600 },
+    });
+
+    if (!res.ok) return null;
+    const json = await res.json();
+    const media = json.data?.Media;
+    if (!media) return null;
+
+    return {
+      romaji: media.title?.romaji ?? null,
+      english: media.title?.english ?? null,
+      native: media.title?.native ?? null,
+      episodes: media.episodes ?? null,
+      format: media.format ?? null,
+      seasonYear: media.seasonYear ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function cleanTitle(title: string): string {
   return title
-    .replace(/[-:_()[\]]/g, " ")
+    .replace(/[():[\]]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/**
- * Fetch movie detail from PhimAPI
- */
-async function fetchPhimDetail(slug: string): Promise<CacheEntry | null> {
-  const cached = cache.get(slug);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-    return cached;
+function buildSearchCandidates(meta: AnimeMeta): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (raw: string | null) => {
+    if (!raw) return;
+    const cleaned = cleanTitle(raw);
+    if (cleaned && !seen.has(cleaned.toLowerCase())) {
+      seen.add(cleaned.toLowerCase());
+      candidates.push(cleaned);
+    }
+  };
+
+  addCandidate(meta.romaji);
+  addCandidate(meta.english);
+  addCandidate(meta.native);
+
+  for (const c of [...candidates]) {
+    const base = c
+      .replace(/\s*(?:Season\s*\d+|\b[2-4](?:nd|rd|th)\b|\bPart\s*\d+\b).*$/i, "")
+      .trim();
+    if (base && base !== c && !seen.has(base.toLowerCase())) {
+      seen.add(base.toLowerCase());
+      candidates.push(base);
+    }
   }
 
+  return candidates;
+}
+
+interface PhimEpisodeData {
+  name: string;
+  slug: string;
+  filename: string;
+  link_embed: string;
+  link_m3u8: string;
+}
+
+interface PhimServer {
+  server_name: string;
+  server_data: PhimEpisodeData[];
+}
+
+interface PhimDetail {
+  movieName: string;
+  originName: string;
+  year: number;
+  type: string;
+  episodeTotal: number;
+  episodes: PhimServer[];
+}
+
+async function fetchPhimDetail(slug: string): Promise<PhimDetail | null> {
   try {
     const res = await fetch(`https://phimapi.com/phim/${slug}`, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      },
       next: { revalidate: 1800 },
     });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.episodes) return null;
 
-    const entry: CacheEntry = {
+    const totalStr = String(data.movie?.episode_total || "");
+    const parsedTotal = parseInt(totalStr.replace(/\D/g, ""), 10) || 0;
+
+    return {
       movieName: data.movie?.name || slug,
-      slug,
+      originName: data.movie?.origin_name || "",
+      year: Number(data.movie?.year) || 0,
+      type: data.movie?.type || "",
+      episodeTotal: parsedTotal,
       episodes: data.episodes,
-      timestamp: Date.now(),
     };
-    cache.set(slug, entry);
-    return entry;
   } catch {
     return null;
   }
 }
 
-/**
- * Try searching PhimAPI for matching anime and extract episode streams
- */
-async function getPhimApiStreams(
-  titles: string[],
+function scorePhimMatch(
+  detail: PhimDetail,
+  meta: AnimeMeta | null,
+  maxServerEpCount: number,
+): number {
+  let score = 0;
+  const hay = `${detail.movieName} ${detail.originName}`.toLowerCase();
+
+  if (hay.includes("lego") || hay.includes("live action") || hay.includes("parody")) {
+    score -= 100;
+  }
+
+  if (!meta) return score;
+
+  const titles = [meta.romaji, meta.english]
+    .filter(Boolean)
+    .map((t) => cleanTitle(t as string).toLowerCase());
+
+  if (titles.some((t) => detail.originName.toLowerCase() === t)) {
+    score += 50;
+  } else if (titles.some((t) => hay.includes(t))) {
+    score += 25;
+  }
+
+  if (meta.format === "MOVIE" && detail.type === "single") {
+    score += 30;
+  } else if (meta.format !== "MOVIE" && detail.type !== "single") {
+    score += 20;
+  }
+
+  if (meta.seasonYear && detail.year && Math.abs(meta.seasonYear - detail.year) <= 1) {
+    score += 20;
+  }
+
+  const actualCount = detail.episodeTotal || maxServerEpCount;
+  if (meta.episodes && actualCount > 0) {
+    const diff = Math.abs(meta.episodes - actualCount);
+    if (diff === 0) score += 40;
+    else if (diff <= 2) score += 20;
+    else if (meta.episodes >= 50 && actualCount < 15) score -= 60;
+  } else if (!meta.episodes && meta.format === "TV" && actualCount >= 50) {
+    score += 35;
+  }
+
+  return score;
+}
+
+function matchEpisode(
+  serverData: PhimEpisodeData[],
   targetEp: number,
+): PhimEpisodeData | null {
+  for (const ep of serverData) {
+    const num = parseInt(ep.name.replace(/\D/g, ""), 10);
+    if (num === targetEp) return ep;
+
+    if (
+      targetEp === 1 &&
+      (ep.name.toLowerCase().includes("full") ||
+        ep.slug.toLowerCase().includes("full"))
+    ) {
+      return ep;
+    }
+  }
+  return null;
+}
+
+async function getPhimApiStreams(
+  candidates: string[],
+  targetEp: number,
+  meta: AnimeMeta | null,
 ): Promise<{ animeName: string; servers: StreamServer[] } | null> {
   const searchedSlugs = new Set<string>();
+  const matchedCandidates: Array<{
+    score: number;
+    animeName: string;
+    servers: StreamServer[];
+  }> = [];
 
-  for (const rawTitle of titles) {
-    if (!rawTitle) continue;
-    const cleaned = cleanTitle(rawTitle);
-    if (!cleaned) continue;
-
-    // Search PhimAPI
+  for (const title of candidates) {
     try {
-      const searchUrl = `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(
-        cleaned,
-      )}&limit=6`;
-      const res = await fetch(searchUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
+      const searchUrl = `https://phimapi.com/v1/api/tim-kiem?keyword=${encodeURIComponent(title)}&limit=10`;
+      const res = await fetch(searchUrl);
       if (!res.ok) continue;
 
       const data = await res.json();
@@ -98,75 +228,68 @@ async function getPhimApiStreams(
         if (searchedSlugs.has(item.slug)) continue;
         searchedSlugs.add(item.slug);
 
-        const movieDetail = await fetchPhimDetail(item.slug);
-        if (!movieDetail) continue;
+        const detail = await fetchPhimDetail(item.slug);
+        if (!detail) continue;
 
-        const matchingServers: StreamServer[] = [];
+        const servers: StreamServer[] = [];
+        let maxServerEpCount = 0;
 
-        for (const server of movieDetail.episodes) {
-          const matchedEpisode = server.server_data.find((e) => {
-            const num = parseInt(e.name.replace(/\D/g, ""), 10);
-            if (num === targetEp) return true;
-            // Support movies or single-episode OVA where name is "Full"
-            if (
-              targetEp === 1 &&
-              (e.name.toLowerCase().includes("full") ||
-                e.slug.toLowerCase().includes("full"))
-            ) {
-              return true;
-            }
-            return false;
-          });
-
-          if (matchedEpisode) {
-            const isVietsub =
-              server.server_name.toLowerCase().includes("vietsub") ||
-              !server.server_name.toLowerCase().includes("lồng tiếng");
-
-            matchingServers.push({
-              id: `phimapi-${server.server_name}-${matchedEpisode.slug}`,
-              serverName:
-                server.server_name || (isVietsub ? "Vietsub" : "Lồng Tiếng"),
-              type: "iframe",
-              embedUrl: matchedEpisode.link_embed,
-              m3u8Url: matchedEpisode.link_m3u8,
-              quality: "Full HD",
-              provider: "phimapi",
-            });
+        for (const server of detail.episodes) {
+          if (server.server_data.length > maxServerEpCount) {
+            maxServerEpCount = server.server_data.length;
           }
+          const matched = matchEpisode(server.server_data, targetEp);
+          if (!matched) continue;
+
+          const isVietsub =
+            server.server_name.toLowerCase().includes("vietsub") ||
+            !server.server_name.toLowerCase().includes("lồng tiếng");
+
+          servers.push({
+            id: `phimapi-${server.server_name}-${matched.slug}`,
+            serverName:
+              server.server_name || (isVietsub ? "Vietsub" : "Lồng Tiếng"),
+            type: "iframe",
+            embedUrl: matched.link_embed,
+            m3u8Url: matched.link_m3u8,
+            quality: "Full HD",
+            provider: "phimapi",
+          });
         }
 
-        if (matchingServers.length > 0) {
-          return {
-            animeName: movieDetail.movieName,
-            servers: matchingServers,
-          };
+        if (servers.length > 0) {
+          matchedCandidates.push({
+            score: scorePhimMatch(detail, meta, maxServerEpCount),
+            animeName: detail.movieName,
+            servers,
+          });
         }
       }
-    } catch {
-      // Continue to next candidate title
-    }
+
+      if (matchedCandidates.some((c) => c.score >= 40)) {
+        break;
+      }
+    } catch { }
   }
 
-  return null;
+  if (matchedCandidates.length === 0) return null;
+
+  matchedCandidates.sort((a, b) => b.score - a.score);
+  return {
+    animeName: matchedCandidates[0].animeName,
+    servers: matchedCandidates[0].servers,
+  };
 }
 
-/**
- * Optional Consumet API Integration
- * Works if CONSUMET_API_URL is configured in environment
- */
 async function getConsumetStreams(
   title: string,
   targetEp: number,
 ): Promise<StreamServer[]> {
-  const consumetUrl = process.env.CONSUMET_API_URL;
-  if (!consumetUrl) return [];
+  if (!CONSUMET_API_URL) return [];
 
   try {
     const searchRes = await fetch(
-      `${consumetUrl.replace(/\/$/, "")}/anime/gogoanime/${encodeURIComponent(
-        title,
-      )}`,
+      `${CONSUMET_API_URL}/anime/gogoanime/${encodeURIComponent(title)}`,
       { next: { revalidate: 1800 } },
     );
     if (!searchRes.ok) return [];
@@ -176,7 +299,7 @@ async function getConsumetStreams(
     if (!firstAnime) return [];
 
     const infoRes = await fetch(
-      `${consumetUrl.replace(/\/$/, "")}/anime/gogoanime/info/${firstAnime.id}`,
+      `${CONSUMET_API_URL}/anime/gogoanime/info/${firstAnime.id}`,
     );
     if (!infoRes.ok) return [];
 
@@ -187,21 +310,20 @@ async function getConsumetStreams(
     if (!epObj) return [];
 
     const watchRes = await fetch(
-      `${consumetUrl.replace(/\/$/, "")}/anime/gogoanime/watch/${epObj.id}`,
+      `${CONSUMET_API_URL}/anime/gogoanime/watch/${epObj.id}`,
     );
     if (!watchRes.ok) return [];
 
     const watchData = await watchRes.json();
-    const servers: StreamServer[] = [];
-
-    // Check if watchData provides sources (m3u8)
     const m3u8Source = watchData.sources?.find(
       (s: { isM3U8?: boolean; quality?: string; url: string }) =>
         s.isM3U8 || s.url?.includes(".m3u8"),
     );
 
-    if (m3u8Source) {
-      servers.push({
+    if (!m3u8Source) return [];
+
+    return [
+      {
         id: `consumet-gogo-${epObj.id}`,
         serverName: "Consumet (GogoAnime Engsub)",
         type: "iframe",
@@ -209,10 +331,8 @@ async function getConsumetStreams(
         m3u8Url: m3u8Source.url,
         quality: m3u8Source.quality || "720p/1080p",
         provider: "consumet",
-      });
-    }
-
-    return servers;
+      },
+    ];
   } catch {
     return [];
   }
@@ -220,57 +340,63 @@ async function getConsumetStreams(
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const title = searchParams.get("title") || "";
-  const englishTitle = searchParams.get("englishTitle") || "";
-  const episodeStr = searchParams.get("episode") || "1";
-  const episode = parseInt(episodeStr, 10) || 1;
 
-  if (!title && !englishTitle) {
-    return NextResponse.json<StreamResponse>(
-      {
-        success: false,
-        episode,
-        servers: [],
-        message: "Thiếu tiêu đề phim để tìm kiếm nguồn stream.",
-      },
-      { status: 400 },
-    );
+  const anilistIdStr = searchParams.get("anilistId");
+  const titleParam = searchParams.get("title") || "";
+  const englishTitleParam = searchParams.get("englishTitle") || "";
+  const episode = Math.max(1, parseInt(searchParams.get("episode") || "1", 10) || 1);
+
+  let candidates: string[] = [];
+  let meta: AnimeMeta | null = null;
+
+  if (anilistIdStr) {
+    const anilistId = parseInt(anilistIdStr, 10);
+    if (!Number.isNaN(anilistId)) {
+      meta = await fetchAnimeMeta(anilistId);
+      if (meta) {
+        candidates = buildSearchCandidates(meta);
+      }
+    }
   }
 
-  // Construct prioritized title candidates
-  const candidates: string[] = [];
-  if (title) candidates.push(title);
-  if (englishTitle && englishTitle !== title) candidates.push(englishTitle);
+  if (candidates.length === 0) {
+    if (!titleParam && !englishTitleParam) {
+      return NextResponse.json<StreamResponse>(
+        {
+          success: false,
+          episode,
+          servers: [],
+          message: "Thiếu anilistId hoặc tiêu đề phim để tìm kiếm nguồn stream.",
+        },
+        { status: 400 },
+      );
+    }
 
-  // If title has season indicators like "Season 2", also try base title
-  const baseTitle = title
-    .replace(/\s*(?:Season|\b2nd\b|\b3rd\b|\b4th\b|\bPart\b).*$/i, "")
-    .trim();
-  if (baseTitle && baseTitle !== title && !candidates.includes(baseTitle)) {
-    candidates.push(baseTitle);
+    meta = {
+      romaji: titleParam || null,
+      english: englishTitleParam || null,
+      native: null,
+      episodes: null,
+      format: null,
+      seasonYear: null,
+    };
+    candidates = buildSearchCandidates(meta);
   }
 
-  // 1. Query PhimAPI Vietsub stream provider
-  const phimResult = await getPhimApiStreams(candidates, episode);
-
-  // 2. Query Consumet API if configured
+  const phimResult = await getPhimApiStreams(candidates, episode, meta);
   const consumetServers = await getConsumetStreams(
-    title || englishTitle,
+    candidates[0] || titleParam || englishTitleParam,
     episode,
   );
 
   const allServers: StreamServer[] = [];
-  if (phimResult?.servers) {
-    allServers.push(...phimResult.servers);
-  }
-  if (consumetServers.length > 0) {
-    allServers.push(...consumetServers);
-  }
+  if (phimResult?.servers) allServers.push(...phimResult.servers);
+  if (consumetServers.length > 0) allServers.push(...consumetServers);
 
   if (allServers.length === 0) {
     return NextResponse.json<StreamResponse>({
       success: false,
-      animeName: phimResult?.animeName || title,
+      animeName: phimResult?.animeName || candidates[0] || titleParam,
       episode,
       servers: [],
       message: `Chưa tìm thấy nguồn stream trực tiếp cho Tập ${episode}.`,
@@ -279,7 +405,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json<StreamResponse>({
     success: true,
-    animeName: phimResult?.animeName || title,
+    animeName: phimResult?.animeName || candidates[0] || titleParam,
     episode,
     servers: allServers,
   });

@@ -1,14 +1,9 @@
 import { create } from "zustand";
-import { jikanApi } from "@/services/jikan";
+import { anilistApi } from "@/services/anilist";
 import { fetchEpisodeStream } from "@/services/streaming";
+import type { StreamServer } from "@/types/stream";
+import type { AniListMediaForSeasons } from "@/types/anilist";
 import type { EpisodeProgress } from "@/store/useUserStore";
-import type {
-  Anime,
-  AnimeEpisode,
-  AnimeRecommendationItem,
-  AnimeRelationItem,
-  StreamServer,
-} from "@/types/anime";
 
 export function formatSeconds(sec: number): string {
   if (!sec || Number.isNaN(sec)) return "00:00";
@@ -19,10 +14,10 @@ export function formatSeconds(sec: number): string {
 
 interface WatchState {
   animeId: number | null;
-  anime: Anime | null;
-  episodes: AnimeEpisode[];
-  recommendations: AnimeRecommendationItem[];
-  relations: AnimeRelationItem[];
+  anime: any | null;
+  episodes: any[];
+  recommendations: any[];
+  relations: AniListMediaForSeasons | null;
   isLoading: boolean;
   error: string | null;
 
@@ -44,17 +39,8 @@ interface WatchState {
   copied: boolean;
   episodeSearch: string;
 
-  fetchWatchData: (
-    id: number,
-    initialEpisode: number,
-    addToHistory: (anime: Anime) => void,
-  ) => Promise<void>;
-  fetchStream: (
-    getProgress: (
-      id: number,
-      ep: number,
-    ) => EpisodeProgress | null | undefined,
-  ) => Promise<void>;
+  fetchWatchData: (id: number, initialEpisode: number, addToHistory: (anime: any) => void) => Promise<void>;
+  fetchStream: (getProgress: (id: number, ep: number) => EpisodeProgress | null | undefined) => Promise<void>;
   selectEpisode: (epNum: number) => void;
   selectServer: (server: StreamServer) => void;
   setPlayerMode: (mode: "hls" | "iframe") => void;
@@ -73,10 +59,9 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   anime: null,
   episodes: [],
   recommendations: [],
-  relations: [],
+  relations: null,
   isLoading: true,
   error: null,
-
   currentEpisode: 1,
   scrollTrigger: 0,
   streamServers: [],
@@ -85,11 +70,9 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   streamError: null,
   isTrailerMode: false,
   playerMode: "hls",
-
   showResumePrompt: false,
   resumeTime: 0,
   nextEpisodeCountdown: null,
-
   liked: false,
   likeCount: 0,
   copied: false,
@@ -105,7 +88,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
       anime: null,
       episodes: [],
       recommendations: [],
-      relations: [],
+      relations: null,
       streamServers: [],
       activeServer: null,
       isTrailerMode: false,
@@ -115,43 +98,45 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     });
 
     const [animeRes, epsRes, recsRes, relsRes] = await Promise.allSettled([
-      jikanApi.getAnimeFull(id),
-      jikanApi.getAnimeEpisodes(id),
-      jikanApi.getAnimeRecommendations(id),
-      jikanApi.getAnimeRelations(id),
+      anilistApi.getAnimeFull(id),
+      anilistApi.getAnimeEpisodes(id),
+      anilistApi.getAnimeRecommendations(id),
+      anilistApi.getAnimeRelations(id),
     ]);
 
     if (get().animeId !== id) return;
 
     if (animeRes.status === "fulfilled" && animeRes.value.data) {
-      const animeData = animeRes.value.data;
+      const animeData = animeRes.value.data as any;
       addToHistory(animeData);
-      const initialLikes =
-        animeData.favorites ||
-        Math.floor((animeData.score || 8.0) * 1200) ||
-        1540;
-
       set({
         anime: animeData,
-        likeCount: initialLikes,
+        likeCount:
+          animeData.favourites ||
+          Math.floor((animeData.averageScore || 80) * 120) ||
+          1540,
       });
     } else {
       set({ error: "Không thể tải thông tin anime này." });
     }
 
+    const rawRecs =
+      recsRes.status === "fulfilled"
+        ? (recsRes.value.data as
+          | { nodes?: Array<{ mediaRecommendation?: unknown }> }
+          | unknown[])
+        : null;
+
+    const normalizedRecs = Array.isArray(rawRecs)
+      ? rawRecs
+      : Array.isArray(rawRecs?.nodes)
+        ? rawRecs.nodes.map((n) => n.mediaRecommendation).filter(Boolean)
+        : [];
+
     set({
-      episodes:
-        epsRes.status === "fulfilled" && epsRes.value.data
-          ? epsRes.value.data
-          : [],
-      recommendations:
-        recsRes.status === "fulfilled" && recsRes.value.data
-          ? recsRes.value.data.slice(0, 15)
-          : [],
-      relations:
-        relsRes.status === "fulfilled" && relsRes.value.data
-          ? relsRes.value.data
-          : [],
+      episodes: epsRes.status === "fulfilled" ? epsRes.value.data || [] : [],
+      recommendations: normalizedRecs.slice(0, 15),
+      relations: relsRes.status === "fulfilled" ? relsRes.value.data : null,
       isLoading: false,
     });
   },
@@ -160,87 +145,60 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     const { anime, animeId, currentEpisode, episodes } = get();
     if (!anime || !animeId) return;
 
-    const isAnimeUpcoming =
-      anime.status === "Not yet aired" ||
+    const isUpcoming =
+      anime.status === "NOT_YET_RELEASED" ||
       (episodes.length === 0 && (!anime.episodes || anime.episodes === 0));
 
-    if (isAnimeUpcoming) {
+    if (isUpcoming) {
       set({
-        streamLoading: false,
-        streamServers: [],
-        activeServer: null,
-        isTrailerMode: Boolean(
-          anime.trailer?.embed_url || anime.trailer?.youtube_id,
-        ),
+        streamLoading: false, streamServers: [], activeServer: null,
+        isTrailerMode: Boolean(anime.trailer?.id),
       });
       return;
     }
 
-    const existingProgress = getProgress(animeId, currentEpisode);
-    const hasResume =
-      Boolean(existingProgress) &&
-      (existingProgress?.currentTime ?? 0) > 15 &&
-      !existingProgress?.completed;
+    const progress = getProgress(animeId, currentEpisode);
+    const hasResume = Boolean(progress) && (progress?.currentTime ?? 0) > 15 && !progress?.completed;
 
     set({
-      streamLoading: true,
-      streamError: null,
-      isTrailerMode: false,
+      streamLoading: true, streamError: null, isTrailerMode: false,
       nextEpisodeCountdown: null,
-      resumeTime: hasResume ? existingProgress?.currentTime ?? 0 : 0,
+      resumeTime: hasResume ? progress?.currentTime ?? 0 : 0,
       showResumePrompt: hasResume,
     });
 
     try {
       const res = await fetchEpisodeStream({
-        title: anime.title,
-        englishTitle: anime.title_english,
+        anilistId: animeId,
         episode: currentEpisode,
-        malId: animeId,
+        title: anime.title?.romaji,
+        englishTitle: anime.title?.english,
       });
 
-      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) {
-        return;
-      }
+      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) return;
 
       if (res.success && res.servers.length > 0) {
-        const firstServer = res.servers[0];
         set({
           streamServers: res.servers,
-          activeServer: firstServer,
+          activeServer: res.servers[0],
           isTrailerMode: false,
-          playerMode: firstServer.m3u8Url ? "hls" : "iframe",
+          playerMode: res.servers[0].m3u8Url ? "hls" : "iframe",
           streamLoading: false,
         });
       } else {
-        const hasTrailer = Boolean(
-          anime.trailer?.embed_url || anime.trailer?.youtube_id,
-        );
+        const hasTrailer = Boolean(anime.trailer?.id);
         set({
-          streamServers: [],
-          activeServer: null,
-          isTrailerMode: hasTrailer,
-          streamError: hasTrailer
-            ? null
-            : res.message ||
-            `Chưa tìm thấy máy chủ stream cho Tập ${currentEpisode}.`,
+          streamServers: [], activeServer: null, isTrailerMode: hasTrailer,
+          streamError: hasTrailer ? null : res.message || `Chưa tìm thấy nguồn cho Tập ${currentEpisode}.`,
           streamLoading: false,
         });
       }
     } catch {
-      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) {
-        return;
-      }
-      const hasTrailer = Boolean(
-        anime.trailer?.embed_url || anime.trailer?.youtube_id,
-      );
+      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) return;
+      const hasTrailer = Boolean(anime.trailer?.id);
       set({
-        streamServers: [],
-        activeServer: null,
-        isTrailerMode: hasTrailer,
-        streamError: hasTrailer
-          ? null
-          : "Lỗi kết nối khi tải nguồn video trực tiếp.",
+        streamServers: [], activeServer: null, isTrailerMode: hasTrailer,
+        streamError: hasTrailer ? null : "Không có kết nối mạng.",
         streamLoading: false,
       });
     }
@@ -249,67 +207,31 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   selectEpisode: (epNum) => {
     const { animeId, currentEpisode } = get();
     if (epNum === currentEpisode || !animeId) return;
-
-    set((state) => ({
-      currentEpisode: epNum,
-      nextEpisodeCountdown: null,
-      scrollTrigger: state.scrollTrigger + 1,
-    }));
-
+    set((s) => ({ currentEpisode: epNum, nextEpisodeCountdown: null, scrollTrigger: s.scrollTrigger + 1 }));
     if (typeof window !== "undefined") {
-      window.history.replaceState(
-        null,
-        "",
-        `/anime/${animeId}/watch?ep=${epNum}`,
-      );
+      window.history.replaceState(null, "", `/anime/${animeId}/watch?ep=${epNum}`);
     }
   },
 
   selectServer: (server) =>
-    set({
-      activeServer: server,
-      isTrailerMode: false,
-      ...(server.m3u8Url ? { playerMode: "hls" as const } : {}),
-    }),
+    set({ activeServer: server, isTrailerMode: false, ...(server.m3u8Url ? { playerMode: "hls" as const } : {}) }),
 
   setPlayerMode: (mode) => set({ playerMode: mode }),
-
-  enableTrailerMode: () =>
-    set({
-      isTrailerMode: true,
-      activeServer: null,
-    }),
-
+  enableTrailerMode: () => set({ isTrailerMode: true, activeServer: null }),
   setShowResumePrompt: (show) => set({ showResumePrompt: show }),
-
   setResumeTime: (time) => set({ resumeTime: time }),
-
   setNextEpisodeCountdown: (value) => set({ nextEpisodeCountdown: value }),
-
   decrementCountdown: () =>
-    set((state) => ({
-      nextEpisodeCountdown:
-        state.nextEpisodeCountdown !== null
-          ? state.nextEpisodeCountdown - 1
-          : null,
-    })),
+    set((s) => ({ nextEpisodeCountdown: s.nextEpisodeCountdown !== null ? s.nextEpisodeCountdown - 1 : null })),
 
   toggleLike: () =>
-    set((state) => {
-      const next = !state.liked;
-      return {
-        liked: next,
-        likeCount: next ? state.likeCount + 1 : state.likeCount - 1,
-      };
-    }),
+    set((s) => ({ liked: !s.liked, likeCount: !s.liked ? s.likeCount + 1 : s.likeCount - 1 })),
 
   shareCurrentUrl: () => {
     if (typeof window === "undefined") return;
     navigator.clipboard.writeText(window.location.href);
     set({ copied: true });
-    setTimeout(() => {
-      set({ copied: false });
-    }, 2500);
+    setTimeout(() => set({ copied: false }), 2500);
   },
 
   setEpisodeSearch: (query) => set({ episodeSearch: query }),

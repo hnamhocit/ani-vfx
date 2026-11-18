@@ -1,15 +1,25 @@
+"use client";
+
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
 import { useWatchStore } from "@/store/useWatchStore";
 
+interface WatchBreadcrumbAnime {
+  title?: {
+    english?: string | null;
+    romaji?: string | null;
+  };
+}
+
 export function WatchBreadcrumb() {
   const animeId = useWatchStore((s) => s.animeId);
-  const anime = useWatchStore((s) => s.anime);
+  const anime = useWatchStore((s) => s.anime) as WatchBreadcrumbAnime | null;
   const currentEpisode = useWatchStore((s) => s.currentEpisode);
 
   if (!anime || !animeId) return null;
 
-  const displayTitle = anime.title_english || anime.title;
+  const displayTitle =
+    anime.title?.english || anime.title?.romaji || "Unknown";
 
   return (
     <div className="border-b border-zinc-800/80 bg-[#0c0e17]/90 backdrop-blur-md sticky top-14 sm:top-16 z-30">

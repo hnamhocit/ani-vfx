@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Check,
   ChevronLeft,
@@ -11,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
+import { EpisodeProgressBar } from "@/components/shared/EpisodeProgressBar";
 import { useDetailStore } from "@/store/useDetailStore";
 import { useUserStore } from "@/store/useUserStore";
 
@@ -18,8 +21,8 @@ export function DetailEpisodesSection() {
   const { isWatched, getProgress } = useUserStore();
 
   const animeId = useDetailStore((s) => s.animeId);
-  const anime = useDetailStore((s) => s.anime);
-  const episodes = useDetailStore((s) => s.episodes);
+  const anime = useDetailStore((s) => s.anime) as any;
+  const episodes = useDetailStore((s) => s.episodes) as any[];
   const episodePage = useDetailStore((s) => s.episodePage);
   const totalEpisodePages = useDetailStore((s) => s.totalEpisodePages);
   const totalEpisodesCount = useDetailStore((s) => s.totalEpisodesCount);
@@ -34,9 +37,9 @@ export function DetailEpisodesSection() {
   const filteredEpisodes = useMemo(() => {
     if (!episodeSearch.trim()) return episodes;
     const query = episodeSearch.toLowerCase().trim();
-    return episodes.filter((ep) => {
-      const matchesNumber = ep.mal_id.toString().includes(query);
-      const matchesTitle = ep.title.toLowerCase().includes(query);
+    return episodes.filter((ep: any) => {
+      const matchesNumber = String(ep.id).includes(query);
+      const matchesTitle = (ep.title || "").toLowerCase().includes(query);
       return matchesNumber || matchesTitle;
     });
   }, [episodes, episodeSearch]);
@@ -44,7 +47,7 @@ export function DetailEpisodesSection() {
   if (!anime || !animeId) return null;
 
   const isUpcoming =
-    anime.status === "Not yet aired" ||
+    anime.status === "NOT_YET_RELEASED" ||
     (episodes.length === 0 && (!anime.episodes || anime.episodes === 0));
 
   return (
@@ -68,7 +71,7 @@ export function DetailEpisodesSection() {
             <p className="text-xs sm:text-sm text-zinc-400 sm:text-zinc-300 mt-0.5">
               {isUpcoming
                 ? "Thông tin các tập phim sẽ được cập nhật khi có thông báo chính thức"
-                : "Tổng hợp danh sách các tập chính thức từ MyAnimeList"}
+                : "Chọn tập phim bên dưới để bắt đầu xem ngay"}
             </p>
           </div>
         </div>
@@ -85,16 +88,15 @@ export function DetailEpisodesSection() {
                 className="w-full bg-[#1a1d2e] border border-purple-500/30 rounded-xl pl-9 sm:pl-11 pr-3 py-2 sm:py-2.5 text-sm sm:text-base text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-purple-400 transition"
               />
             </div>
-
             <div className="flex items-center bg-[#1a1d2e] border border-purple-500/30 rounded-xl p-1 shrink-0">
               <button
                 type="button"
                 onClick={() => setEpisodeViewMode("grid")}
                 className={`p-2 sm:p-2.5 rounded-lg transition cursor-pointer ${episodeViewMode === "grid"
-                    ? "bg-[#7950f2] text-white shadow-sm"
-                    : "text-zinc-400 hover:text-white"
+                  ? "bg-[#7950f2] text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
                   }`}
-                title="Chế độ Lưới"
+                title="Lưới"
               >
                 <LayoutGrid className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -102,10 +104,10 @@ export function DetailEpisodesSection() {
                 type="button"
                 onClick={() => setEpisodeViewMode("list")}
                 className={`p-2 sm:p-2.5 rounded-lg transition cursor-pointer ${episodeViewMode === "list"
-                    ? "bg-[#7950f2] text-white shadow-sm"
-                    : "text-zinc-400 hover:text-white"
+                  ? "bg-[#7950f2] text-white shadow-sm"
+                  : "text-zinc-400 hover:text-white"
                   }`}
-                title="Chế độ Danh sách"
+                title="Danh sách"
               >
                 <List className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
@@ -136,31 +138,32 @@ export function DetailEpisodesSection() {
             </h3>
             <p className="text-xs sm:text-sm text-zinc-400 max-w-lg mx-auto leading-relaxed">
               {isUpcoming
-                ? "Phim đang trong quá trình sản xuất hoặc chưa có lịch khởi chiếu chính thức từ nhà sản xuất."
-                : "Không tìm thấy tập phim nào phù hợp với từ khóa tìm kiếm của bạn."}
+                ? "Phim đang trong quá trình sản xuất hoặc chưa có lịch khởi chiếu chính thức."
+                : "Không tìm thấy tập phim nào phù hợp với từ khóa."}
             </p>
           </div>
         </div>
       ) : episodeViewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 pt-1">
-          {filteredEpisodes.map((ep) => {
-            const watched = isWatched(animeId, ep.mal_id);
-            const epProg = getProgress(animeId, ep.mal_id);
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 sm:gap-3.5 p-1 -mx-1">
+          {filteredEpisodes.map((ep: any) => {
+            const watched = isWatched(animeId, ep.id);
+            const epProg = getProgress(animeId, ep.id);
+
             return (
               <Link
-                key={ep.mal_id}
-                href={`/anime/${animeId}/watch?ep=${ep.mal_id}`}
-                className={`group relative flex flex-col justify-center p-3 sm:p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer select-none active:scale-97 text-left overflow-hidden ${watched
-                    ? "bg-[#181a28] text-zinc-300 border-emerald-500/30 hover:border-purple-400"
-                    : "bg-[#151724] hover:bg-[#1f2235] border-purple-500/25 hover:border-purple-400 text-zinc-100 hover:shadow-lg hover:shadow-purple-600/20"
+                key={ep.id}
+                href={`/anime/${animeId}/watch?ep=${ep.id}`}
+                className={`group relative flex flex-col justify-center p-3 sm:p-4 rounded-xl border-2 transition-all duration-200 cursor-pointer select-none active:scale-97 text-left ${watched
+                  ? "bg-[#181a28] text-zinc-300 border-emerald-500/30 hover:border-purple-400"
+                  : "bg-[#151724] hover:bg-[#1f2235] border-purple-500/25 hover:border-purple-400 text-zinc-100 hover:shadow-lg hover:shadow-purple-600/20"
                   }`}
               >
                 <div className="flex items-center justify-between gap-1.5 w-full">
                   <div className="flex items-center gap-2 min-w-0">
                     <span
                       className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${watched
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-purple-500/20 text-purple-300 group-hover:bg-[#7950f2] group-hover:text-white"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-purple-500/20 text-purple-300 group-hover:bg-[#7950f2] group-hover:text-white"
                         }`}
                     >
                       {watched ? (
@@ -170,63 +173,57 @@ export function DetailEpisodesSection() {
                       )}
                     </span>
                     <span className="font-heading font-black text-sm sm:text-lg text-white truncate">
-                      Tập {ep.mal_id}
+                      Tập {ep.id}
                     </span>
                   </div>
-
                   {ep.filler && (
                     <span className="text-[10px] sm:text-[11px] font-bold text-amber-300 bg-amber-400/20 border border-amber-400/30 px-1.5 py-0.5 rounded-md shrink-0">
                       Filler
                     </span>
                   )}
                 </div>
-
                 <p className="text-xs sm:text-sm text-zinc-400 group-hover:text-zinc-200 font-medium truncate w-full mt-1.5 sm:mt-2 transition-colors">
-                  {ep.title && ep.title !== `Episode ${ep.mal_id}`
+                  {ep.title && ep.title !== `Episode ${ep.id}`
                     ? ep.title
                     : "Tập phim chính"}
                 </p>
-
-                {epProg && epProg.percentage > 0 && (
-                  <div className="w-full bg-zinc-800 h-1 rounded-full overflow-hidden mt-2">
-                    <div
-                      className={`h-full transition-all ${watched ? "bg-emerald-500" : "bg-purple-500"
-                        }`}
-                      style={{
-                        width: `${Math.min(100, epProg.percentage)}%`,
-                      }}
-                    />
-                  </div>
+                {epProg && (
+                  <EpisodeProgressBar
+                    percentage={epProg.percentage}
+                    watched={watched}
+                    className="w-full mt-2"
+                  />
                 )}
               </Link>
             );
           })}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5 pt-1">
-          {filteredEpisodes.map((ep) => {
-            const watched = isWatched(animeId, ep.mal_id);
-            const epProg = getProgress(animeId, ep.mal_id);
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5 p-1 -mx-1">
+          {filteredEpisodes.map((ep: any) => {
+            const watched = isWatched(animeId, ep.id);
+            const epProg = getProgress(animeId, ep.id);
+
             return (
               <Link
-                key={ep.mal_id}
-                href={`/anime/${animeId}/watch?ep=${ep.mal_id}`}
+                key={ep.id}
+                href={`/anime/${animeId}/watch?ep=${ep.id}`}
                 className={`group flex items-center justify-between p-3 sm:p-4 rounded-xl border-2 cursor-pointer transition-all active:scale-98 text-left ${watched
-                    ? "bg-[#181a28] text-zinc-300 border-emerald-500/30 hover:border-purple-400"
-                    : "bg-[#151724] hover:bg-[#1f2235] border-purple-500/25 hover:border-purple-400 text-zinc-100 hover:shadow-lg hover:shadow-purple-600/20"
+                  ? "bg-[#181a28] text-zinc-300 border-emerald-500/30 hover:border-purple-400"
+                  : "bg-[#151724] hover:bg-[#1f2235] border-purple-500/25 hover:border-purple-400 text-zinc-100 hover:shadow-lg hover:shadow-purple-600/20"
                   }`}
               >
                 <div className="flex items-center gap-3 min-w-0 pr-2">
                   <span
                     className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center font-black text-sm sm:text-base shrink-0 shadow-sm font-heading transition-colors ${watched
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-purple-500/20 text-purple-200 group-hover:bg-[#7950f2] group-hover:text-white"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-purple-500/20 text-purple-200 group-hover:bg-[#7950f2] group-hover:text-white"
                       }`}
                   >
                     {watched ? (
                       <Check className="w-4 h-4 text-emerald-400" />
                     ) : (
-                      ep.mal_id
+                      ep.id
                     )}
                   </span>
                   <div className="min-w-0">
@@ -241,20 +238,15 @@ export function DetailEpisodesSection() {
                         Tập ngoại truyện
                       </span>
                     )}
-                    {epProg && epProg.percentage > 0 && (
-                      <div className="w-28 sm:w-32 bg-zinc-800 h-1 rounded-full overflow-hidden mt-1.5">
-                        <div
-                          className={`h-full transition-all ${watched ? "bg-emerald-500" : "bg-purple-500"
-                            }`}
-                          style={{
-                            width: `${Math.min(100, epProg.percentage)}%`,
-                          }}
-                        />
-                      </div>
+                    {epProg && (
+                      <EpisodeProgressBar
+                        percentage={epProg.percentage}
+                        watched={watched}
+                        className="w-28 sm:w-32 mt-1.5"
+                      />
                     )}
                   </div>
                 </div>
-
                 <span className="text-xs font-semibold text-purple-400 shrink-0 group-hover:text-purple-300 flex items-center gap-1">
                   <Play className="w-3.5 h-3.5 fill-current" />
                   <span className="hidden sm:inline">Xem ngay</span>
