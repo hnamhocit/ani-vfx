@@ -31,6 +31,8 @@ function HlsVideoPlayer({
   poster,
   videoElementRef,
   autoPlay,
+  startTime = 0,
+  fullscreenRef,
   hasPrevEpisode,
   hasNextEpisode,
   onPrevEpisode,
@@ -85,6 +87,7 @@ function HlsVideoPlayer({
   } = usePlayerControls({
     videoRef,
     containerRef,
+    fullscreenRef,
     hasError,
     isQualityMenuOpen,
     isDragging,
@@ -141,24 +144,21 @@ function HlsVideoPlayer({
         poster={poster}
         playsInline
         preload="auto"
-        autoPlay={autoPlay && !checkpoint}
         muted={isMuted}
         onLoadedMetadata={(e) => {
           const video = e.currentTarget;
           const duration = Number.isFinite(video.duration) ? video.duration : 0;
           setDuration(duration);
-          if (!checkpoint || duration <= 0) return;
-          const isCompatible =
+          const compatibleCheckpoint =
+            checkpoint &&
             Math.abs(duration - checkpoint.duration) <=
-            Math.max(5, duration * 0.03);
-          if (
-            isCompatible &&
-            checkpoint.time > 0 &&
-            checkpoint.time < duration
-          ) {
-            video.currentTime = checkpoint.time;
+              Math.max(5, duration * 0.03);
+          const targetTime = compatibleCheckpoint ? checkpoint.time : startTime;
+          if (targetTime > 0 && targetTime < duration)
+            video.currentTime = targetTime;
+          if (checkpoint ? checkpoint.wasPlaying : autoPlay) {
+            void video.play().catch(revealControls);
           }
-          if (checkpoint.wasPlaying) void video.play().catch(() => {});
         }}
         onPlay={() => setIsPlaying(true)}
         onPause={(event) => {

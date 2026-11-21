@@ -8,6 +8,7 @@ import type { AnimeSeasonItem } from "@/types/anilist";
 import { getReleasedEpisodeCount, isAnimeUpcoming } from "@/utils/anime";
 import type { useWatchSource } from "./useWatchSource";
 import {
+  WatchNextEpisodeHint,
   WatchNextEpisodePrompt,
   WatchResumePrompt,
 } from "./WatchPlaybackPrompts";
@@ -23,14 +24,16 @@ export function WatchPlayerSection({
 }) {
   const playerRef = useRef<HTMLDivElement | null>(null);
   const { videoRef, checkpoint } = source;
-  const [autoPlayEpisode, setAutoPlayEpisode] = useState<number | null>(null);
+  const [nearEndEpisode, setNearEndEpisode] = useState<number | null>(null);
   const lastSavedTime = useRef<{ key: string; at: number } | null>(null);
   const saveProgress = useUserStore((s) => s.saveProgress);
+  const autoPlayNextEpisode = useUserStore((s) => s.autoPlayNextEpisode);
   const markWatched = useUserStore((s) => s.markWatched);
 
   const animeId = useWatchStore((s) => s.animeId);
   const anime = useWatchStore((s) => s.anime);
   const episodes = useWatchStore((s) => s.episodes);
+  const playEpisodeOnLoad = useWatchStore((s) => s.playEpisodeOnLoad);
   const currentEpisode = useWatchStore((s) => s.currentEpisode);
   const scrollTrigger = useWatchStore((s) => s.scrollTrigger);
   const streamLoading = useWatchStore((s) => s.streamLoading);
@@ -51,7 +54,7 @@ export function WatchPlayerSection({
   const decrementCountdown = useWatchStore((s) => s.decrementCountdown);
 
   useEffect(() => {
-    if (scrollTrigger > 0) {
+    if (scrollTrigger > 0 && document.fullscreenElement !== playerRef.current) {
       const reduceMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)",
       ).matches;
@@ -72,17 +75,8 @@ export function WatchPlayerSection({
   const hasNextEpisode = currentEpisode < totalEpisodes;
   const handlePlayNextNow = useCallback(() => {
     setNextEpisodeCountdown(null);
-    if (hasNextEpisode) {
-      setAutoPlayEpisode(currentEpisode + 1);
-      selectEpisode(currentEpisode + 1);
-    }
+    if (hasNextEpisode) selectEpisode(currentEpisode + 1);
   }, [currentEpisode, hasNextEpisode, selectEpisode, setNextEpisodeCountdown]);
-
-  useEffect(() => {
-    if (autoPlayEpisode !== null && autoPlayEpisode !== currentEpisode) {
-      setAutoPlayEpisode(null);
-    }
-  }, [autoPlayEpisode, currentEpisode]);
 
   useEffect(() => {
     if (nextEpisodeCountdown === null) return;
@@ -111,12 +105,14 @@ export function WatchPlayerSection({
     duration: number,
     flush = false,
   ) => {
-    if (currTime <= 0 || duration <= 0 || !Number.isFinite(duration)) return;
+    if (duration <= 0 || !Number.isFinite(duration)) return;
     if (
       useWatchStore.getState().animeId !== animeId ||
       useWatchStore.getState().currentEpisode !== currentEpisode
     )
       return;
+    setNearEndEpisode(currTime / duration >= 0.95 ? currentEpisode : null);
+    if (currTime <= 0) return;
     if (videoRef.current) source.recordPosition(videoRef.current);
     const key = `${animeId}_${currentEpisode}`;
     const now = Date.now();
@@ -132,8 +128,7 @@ export function WatchPlayerSection({
 
   const handleVideoEnded = () => {
     markWatched(animeId, currentEpisode);
-    if (hasNextEpisode && useUserStore.getState().autoPlayNextEpisode)
-      setNextEpisodeCountdown(5);
+    if (hasNextEpisode && autoPlayNextEpisode) setNextEpisodeCountdown(5);
   };
 
   const handleResume = () => {
@@ -150,13 +145,14 @@ export function WatchPlayerSection({
       video.currentTime = 0;
       video.play().catch(() => {});
     }
+    setNearEndEpisode(null);
     setNextEpisodeCountdown(null);
   };
 
   return (
     <div
       ref={playerRef}
-      className="relative w-full aspect-video rounded-2xl sm:rounded-3xl overflow-hidden bg-black border border-purple-500/30 shadow-2xl shadow-black/90 group scroll-mt-32"
+      className="relative w-full aspect-video rounded-2xl sm:rounded-3xl overflow-hidden bg-black border border-purple-500/30 shadow-2xl shadow-black/90 group scroll-mt-32 fullscreen:h-full fullscreen:rounded-none fullscreen:border-0"
     >
       {isUpcoming || totalEpisodes === 0 ? (
         isTrailerMode && hasTrailer ? (
@@ -186,7 +182,9 @@ export function WatchPlayerSection({
             title={`Tập ${currentEpisode} - ${displayTitle}`}
             poster={bannerImage}
             videoElementRef={videoRef}
-            autoPlay={autoPlayEpisode === currentEpisode && !showResumePrompt}
+            fullscreenRef={playerRef}
+            autoPlay={playEpisodeOnLoad}
+            startTime={playEpisodeOnLoad && showResumePrompt ? resumeTime : 0}
             onTimeUpdate={handleVideoTimeUpdate}
             onEnded={handleVideoEnded}
             hasPrevEpisode={currentEpisode > 1}
@@ -249,12 +247,25 @@ export function WatchPlayerSection({
         playerMode === "hls" &&
         !streamLoading &&
         !checkpoint &&
+        !playEpisodeOnLoad &&
         showResumePrompt &&
         resumeTime > 0 && (
           <WatchResumePrompt
             resumeTime={resumeTime}
             onResume={handleResume}
             onDismiss={() => setShowResumePrompt(false)}
+          />
+        )}
+      {hasNextEpisode &&
+        nearEndEpisode === currentEpisode &&
+        !streamLoading &&
+        activeServer &&
+        playerMode === "hls" &&
+        nextEpisodeCountdown === null && (
+          <WatchNextEpisodeHint
+            episode={currentEpisode + 1}
+            autoPlay={autoPlayNextEpisode}
+            onPlayNext={handlePlayNextNow}
           />
         )}
       {nextEpisodeCountdown !== null && (

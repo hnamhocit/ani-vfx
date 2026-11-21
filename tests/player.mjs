@@ -169,7 +169,7 @@ try {
     );
     assert.equal(await evaluate(`${video}.volume`), 0.5);
     assert.ok(
-      await evaluate(`${video}.currentTime < 1`),
+      await evaluate(`${video}.currentTime < 8`),
       "A source checkpoint leaked into a different episode",
     );
 
@@ -330,6 +330,47 @@ try {
     await wait(
       'document.querySelectorAll("video").length === 1',
       "Touch preview stayed mounted after release",
+    );
+
+    await send("Emulation.clearDeviceMetricsOverride");
+    await send("Emulation.setTouchEmulationEnabled", { enabled: false });
+    await navigate(`${origin}/anime/1/watch?ep=1`);
+    await ready();
+    const fullscreenButton = `${player}.querySelector('button[aria-label="Toàn màn hình"]')`;
+    await click(fullscreenButton);
+    await wait(
+      `document.fullscreenElement?.contains(${video}) === true`,
+      "Player failed to enter fullscreen",
+    );
+    await evaluate(
+      "void (window.fullscreenBeforeSwitch = document.fullscreenElement)",
+    );
+    const nextHint = button("Tập tiếp theo · Tập 2");
+    assert.equal(await evaluate(`Boolean(${nextHint})`), false);
+    await evaluate(`${video}.currentTime = ${video}.duration * 0.96`);
+    await wait(
+      `Boolean(${nextHint})`,
+      "Next-episode shortcut did not appear near the end",
+    );
+    await click(nextHint);
+    await wait(
+      'document.fullscreenElement?.textContent.includes("Đang tìm nguồn phát cho tập 2") === true',
+      "Next-episode loading was not shown in fullscreen",
+    );
+    await ready();
+    await wait(
+      `${player}.getAttribute("aria-label").startsWith("Tập 2") && !${video}.paused`,
+      "The next episode did not start automatically",
+    );
+    assert.equal(
+      await evaluate(
+        "document.fullscreenElement === window.fullscreenBeforeSwitch",
+      ),
+      true,
+    );
+    await wait(
+      `${video}.currentTime > 0.25`,
+      "The new episode did not advance on its own",
     );
   });
   console.log("Player regression checks passed");

@@ -16,6 +16,7 @@ interface WatchState {
   error: string | null;
 
   currentEpisode: number;
+  playEpisodeOnLoad: boolean;
   scrollTrigger: number;
   streamServers: StreamServer[];
   activeServer: StreamServer | null;
@@ -64,6 +65,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   isLoading: true,
   error: null,
   currentEpisode: 1,
+  playEpisodeOnLoad: false,
   scrollTrigger: 0,
   streamServers: [],
   activeServer: null,
@@ -83,6 +85,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     set({
       animeId: id,
       currentEpisode: initialEpisode,
+      playEpisodeOnLoad: false,
       scrollTrigger: 0,
       isLoading: true,
       error: null,
@@ -242,6 +245,7 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     if (epNum === currentEpisode || !animeId) return;
     set((s) => ({
       currentEpisode: epNum,
+      playEpisodeOnLoad: true,
       activeServer: null,
       streamServers: [],
       streamLoading: true,

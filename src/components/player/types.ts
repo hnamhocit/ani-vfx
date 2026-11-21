@@ -8,6 +8,8 @@ export interface CustomVideoPlayerProps {
   poster?: string;
   videoElementRef?: RefObject<HTMLVideoElement | null>;
   autoPlay?: boolean;
+  startTime?: number;
+  fullscreenRef?: RefObject<HTMLElement | null>;
   hasPrevEpisode?: boolean;
   hasNextEpisode?: boolean;
   onPrevEpisode?: () => void;

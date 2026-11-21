@@ -103,3 +103,31 @@ export function WatchNextEpisodePrompt({
     </div>
   );
 }
+
+export function WatchNextEpisodeHint({
+  episode,
+  autoPlay,
+  onPlayNext,
+}: {
+  episode: number;
+  autoPlay: boolean;
+  onPlayNext: () => void;
+}) {
+  return (
+    <div className="absolute right-2 top-9 z-30 flex flex-col items-end gap-1 sm:right-4 sm:top-14">
+      {autoPlay && (
+        <span className="rounded bg-black/80 px-2 py-0.5 text-[10px] font-medium text-zinc-100 sm:text-xs">
+          Sắp phát tập tiếp theo
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onPlayNext}
+        className="inline-flex min-h-10 cursor-pointer items-center gap-1.5 rounded-lg bg-zinc-950/90 px-3 text-xs font-bold text-white ring-1 ring-white/25 hover:bg-purple-700 sm:text-sm"
+      >
+        <FastForward aria-hidden="true" className="size-4" />
+        Tập tiếp theo · Tập {episode}
+      </button>
+    </div>
+  );
+}

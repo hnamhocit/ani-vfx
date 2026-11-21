@@ -13,6 +13,7 @@ const SEEK_STEP_SECONDS = 10;
 export function usePlayerControls({
   videoRef,
   containerRef,
+  fullscreenRef,
   hasError,
   isQualityMenuOpen,
   isDragging,
@@ -21,6 +22,7 @@ export function usePlayerControls({
 }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   containerRef: RefObject<HTMLFieldSetElement | null>;
+  fullscreenRef?: RefObject<HTMLElement | null>;
   hasError: boolean;
   isQualityMenuOpen: boolean;
   isDragging: boolean;
@@ -77,10 +79,14 @@ export function usePlayerControls({
 
   useEffect(() => {
     const onFsChange = () =>
-      setIsFullscreen(document.fullscreenElement === containerRef.current);
+      setIsFullscreen(
+        document.fullscreenElement ===
+          (fullscreenRef?.current ?? containerRef.current),
+      );
+    onFsChange();
     document.addEventListener("fullscreenchange", onFsChange);
     return () => document.removeEventListener("fullscreenchange", onFsChange);
-  }, [containerRef]);
+  }, [containerRef, fullscreenRef]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
@@ -123,7 +129,7 @@ export function usePlayerControls({
   }, [toggleMute, revealControls]);
 
   const toggleFullscreen = useCallback(async () => {
-    const container = containerRef.current;
+    const container = fullscreenRef?.current ?? containerRef.current;
     if (!container?.requestFullscreen) return;
     if (!document.fullscreenElement) {
       await container.requestFullscreen().catch(() => {});
@@ -131,7 +137,7 @@ export function usePlayerControls({
       await document.exitFullscreen().catch(() => {});
     }
     revealControls();
-  }, [containerRef, revealControls]);
+  }, [containerRef, fullscreenRef, revealControls]);
 
   useEffect(() => {
     if (hasError) return;
