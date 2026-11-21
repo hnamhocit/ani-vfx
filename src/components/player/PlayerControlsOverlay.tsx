@@ -17,6 +17,7 @@ import { PlayerVolumeControl } from "./PlayerVolumeControl";
 import type { QualityOption } from "./types";
 
 interface PlayerControlsOverlayProps {
+  src: string;
   visible: boolean;
   title: string;
   activeQualityLabel: string;
@@ -40,6 +41,7 @@ interface PlayerControlsOverlayProps {
   onSkipBy: (delta: number) => void;
   onPrevEpisode?: () => void;
   onNextEpisode?: () => void;
+  onPreviewHover: (hovered: boolean) => void;
   onDragStart: (time: number) => void;
   onDragMove: (time: number) => void;
   onDragEnd: (time: number) => void;
@@ -53,6 +55,7 @@ interface PlayerControlsOverlayProps {
 }
 
 export function PlayerControlsOverlay({
+  src,
   visible,
   title,
   activeQualityLabel,
@@ -76,6 +79,7 @@ export function PlayerControlsOverlay({
   onSkipBy,
   onPrevEpisode,
   onNextEpisode,
+  onPreviewHover,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -165,11 +169,13 @@ export function PlayerControlsOverlay({
         </div>
 
         <PlayerScrubBar
+          src={src}
           currentTime={currentTime}
           duration={duration}
           buffered={buffered}
           isDragging={isDragging}
           dragTime={dragTime}
+          onPreviewHover={onPreviewHover}
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragEnd={onDragEnd}

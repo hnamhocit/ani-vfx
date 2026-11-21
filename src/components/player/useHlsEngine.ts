@@ -11,6 +11,7 @@ import type { QualityOption } from "./types";
 export function useHlsEngine(
   videoRef: RefObject<HTMLVideoElement | null>,
   src?: string,
+  previewStartTime?: number,
 ) {
   const hlsRef = useRef<Hls | null>(null);
 
@@ -26,11 +27,25 @@ export function useHlsEngine(
     if (Hls.isSupported()) {
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
+        lowLatencyMode: previewStartTime === undefined,
+        ...(previewStartTime === undefined
+          ? {}
+          : {
+              startPosition: previewStartTime,
+              startLevel: 0,
+              maxBufferLength: 4,
+              maxMaxBufferLength: 8,
+              backBufferLength: 0,
+              capLevelToPlayerSize: true,
+            }),
       });
       hlsRef.current = hls;
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
+        if (previewStartTime !== undefined) {
+          hls.loadLevel = 0;
+          return;
+        }
         const mapped: QualityOption[] = data.levels
           .map((lvl, idx) => ({
             index: idx,
@@ -47,6 +62,7 @@ export function useHlsEngine(
       });
 
       hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
+        if (previewStartTime !== undefined) return;
         const lvl = hls.levels[data.level];
         if (lvl?.height) {
           setActiveAutoHeight(lvl.height);
@@ -74,7 +90,7 @@ export function useHlsEngine(
       video.removeAttribute("src");
       video.load();
     };
-  }, [src, videoRef]);
+  }, [src, videoRef, previewStartTime]);
 
   const selectQuality = useCallback((levelIndex: number) => {
     setSelectedQuality(levelIndex);

@@ -14,17 +14,17 @@ export function usePlayerControls({
   videoRef,
   containerRef,
   hasError,
-  isPlaying,
   isQualityMenuOpen,
   isDragging,
+  isPreviewHover,
   setCurrentTime,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   containerRef: RefObject<HTMLFieldSetElement | null>;
   hasError: boolean;
-  isPlaying: boolean;
   isQualityMenuOpen: boolean;
   isDragging: boolean;
+  isPreviewHover: boolean;
   setCurrentTime: (time: number) => void;
 }) {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,20 +46,17 @@ export function usePlayerControls({
 
   const scheduleHideControls = useCallback(() => {
     clearHideTimer();
+    if (isQualityMenuOpen || isDragging || isPreviewHover) return;
     hideTimerRef.current = setTimeout(() => {
-      const video = videoRef.current;
-      if (
-        video &&
-        !video.paused &&
-        !video.ended &&
-        !isQualityMenuOpen &&
-        !isDragging &&
-        !containerRef.current?.matches(":focus-visible, :has(:focus-visible)")
-      ) {
-        setShowControls(false);
-      }
+      setShowControls(false);
+      hideTimerRef.current = null;
     }, HIDE_DELAY_MS);
-  }, [clearHideTimer, containerRef, videoRef, isQualityMenuOpen, isDragging]);
+  }, [clearHideTimer, isQualityMenuOpen, isDragging, isPreviewHover]);
+
+  const hideControls = useCallback(() => {
+    clearHideTimer();
+    setShowControls(false);
+  }, [clearHideTimer]);
 
   const revealControls = useCallback(() => {
     setShowControls(true);
@@ -75,19 +72,8 @@ export function usePlayerControls({
   }, [clearHideTimer]);
 
   useEffect(() => {
-    if (!isPlaying || isQualityMenuOpen || isDragging) {
-      clearHideTimer();
-      setShowControls(true);
-    } else {
-      scheduleHideControls();
-    }
-  }, [
-    isPlaying,
-    isQualityMenuOpen,
-    isDragging,
-    clearHideTimer,
-    scheduleHideControls,
-  ]);
+    revealControls();
+  }, [revealControls]);
 
   useEffect(() => {
     const onFsChange = () =>
@@ -150,38 +136,43 @@ export function usePlayerControls({
   useEffect(() => {
     if (hasError) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
+      const container = containerRef.current;
+      const target = e.target instanceof Element ? e.target : null;
       if (
+        !container ||
         e.defaultPrevented ||
         e.altKey ||
         e.ctrlKey ||
         e.metaKey ||
         target?.closest(
-          "input, textarea, select, button, a, [contenteditable]:not([contenteditable=false]), [role=slider]",
+          "input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=slider], [role=dialog], [role=menu]",
         )
       ) {
         return;
       }
+      const inside = container.contains(target);
+      const { top, bottom } = container.getBoundingClientRect();
+      if (!inside && (bottom <= 0 || top >= window.innerHeight)) return;
+
       if (e.key === "ArrowLeft") {
         e.preventDefault();
         skipBy(-SEEK_STEP_SECONDS);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         skipBy(SEEK_STEP_SECONDS);
-      } else if (e.key === " ") {
+      } else if (e.key === " " && inside && !target?.closest("button, a")) {
         e.preventDefault();
         togglePlay();
-      } else if (e.key.toLowerCase() === "m") {
+      } else if (e.key.toLowerCase() === "m" && inside) {
         e.preventDefault();
         handleToggleMute();
-      } else if (e.key.toLowerCase() === "f") {
+      } else if (e.key.toLowerCase() === "f" && inside) {
         e.preventDefault();
         toggleFullscreen();
       }
     };
-    const container = containerRef.current;
-    container?.addEventListener("keydown", handleKeyDown);
-    return () => container?.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     hasError,
     containerRef,
@@ -208,9 +199,9 @@ export function usePlayerControls({
 
   return {
     clearHideTimer,
+    hideControls,
     revealControls,
     showControls,
-    setShowControls,
     seekFeedback,
     isMuted,
     volume,

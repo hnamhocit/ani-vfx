@@ -43,7 +43,7 @@ function HlsVideoPlayer({
   const containerRef = useRef<HTMLFieldSetElement | null>(null);
   const internalVideoRef = useRef<HTMLVideoElement | null>(null);
   const videoRef = videoElementRef ?? internalVideoRef;
-  const isTouchRef = useRef(false);
+  const pointerType = useRef("mouse");
 
   const {
     hasError,
@@ -60,6 +60,7 @@ function HlsVideoPlayer({
   const [buffered, setBuffered] = useState(0);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isPreviewHover, setIsPreviewHover] = useState(false);
   const [dragTime, setDragTime] = useState(0);
 
   const [loading, setLoading] = useState<"initial" | "buffering" | null>(
@@ -69,7 +70,7 @@ function HlsVideoPlayer({
     clearHideTimer,
     revealControls,
     showControls,
-    setShowControls,
+    hideControls,
     seekFeedback,
     isMuted,
     volume,
@@ -85,18 +86,14 @@ function HlsVideoPlayer({
     videoRef,
     containerRef,
     hasError,
-    isPlaying,
     isQualityMenuOpen,
     isDragging,
+    isPreviewHover,
     setCurrentTime,
   });
 
   const controlsVisible =
-    showControls ||
-    !isPlaying ||
-    isQualityMenuOpen ||
-    isDragging ||
-    Boolean(loading);
+    showControls || isQualityMenuOpen || isDragging || isPreviewHover;
   const activeQualityLabel =
     selectedQuality === -1
       ? activeAutoHeight
@@ -110,46 +107,31 @@ function HlsVideoPlayer({
       aria-label={title}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: Focusing the player enables its scoped keyboard shortcuts.
       tabIndex={0}
-      onFocus={revealControls}
-      onBlur={revealControls}
-      onMouseMove={() => {
-        if (!isTouchRef.current) revealControls();
+      onFocus={(event) => {
+        if (event.target.matches(":focus-visible")) revealControls();
       }}
-      onMouseEnter={() => {
-        if (!isTouchRef.current) revealControls();
+      onPointerMove={(event) => {
+        if (event.pointerType === "mouse") revealControls();
       }}
-      onMouseLeave={() => {
-        if (
-          !isTouchRef.current &&
-          isPlaying &&
-          !isQualityMenuOpen &&
-          !isDragging &&
-          !containerRef.current?.matches(":focus-visible, :has(:focus-visible)")
-        ) {
-          clearHideTimer();
-          setShowControls(false);
-        }
-      }}
-      onTouchStart={() => {
-        isTouchRef.current = true;
+      onPointerDown={(event) => {
+        pointerType.current = event.pointerType;
       }}
       onClick={(event) => {
         if (
-          event.target instanceof Element &&
-          event.target.closest("button, input, [role=slider]")
+          hasError ||
+          (event.target instanceof Element &&
+            event.target.closest("button, input, [role=slider]"))
         )
           return;
         if (isQualityMenuOpen) {
           setIsQualityMenuOpen(false);
           return;
         }
-        if (isTouchRef.current) {
-          if (showControls && isPlaying) {
-            clearHideTimer();
-            setShowControls(false);
-          } else {
-            revealControls();
-          }
+        if (pointerType.current === "touch" || pointerType.current === "pen") {
+          if (controlsVisible) hideControls();
+          else revealControls();
+        } else {
+          togglePlay();
         }
       }}
       className="relative w-full h-full bg-black select-none overflow-hidden"
@@ -246,6 +228,7 @@ function HlsVideoPlayer({
           )}
 
           <PlayerControlsOverlay
+            src={src}
             visible={controlsVisible}
             title={title}
             activeQualityLabel={activeQualityLabel}
@@ -269,6 +252,7 @@ function HlsVideoPlayer({
             onSkipBy={skipBy}
             onPrevEpisode={onPrevEpisode}
             onNextEpisode={onNextEpisode}
+            onPreviewHover={setIsPreviewHover}
             onDragStart={(time) => {
               setIsDragging(true);
               setDragTime(time);

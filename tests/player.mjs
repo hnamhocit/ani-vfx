@@ -101,7 +101,7 @@ try {
   );
   await new Promise((resolve) => proxy.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${proxy.address().port}`;
-  await withChrome(async ({ navigate, evaluate }) => {
+  await withChrome(async ({ navigate, evaluate, send }) => {
     const wait = (expression, message) =>
       until(() => evaluate(expression), message);
     const click = (selector) => evaluate(`${selector}.click()`);
@@ -185,6 +185,151 @@ try {
     await wait(
       '[...document.querySelectorAll("main a")].some(link => link.textContent.trim() === "Xem tập tiếp theo · Tập 2" && link.getAttribute("href") === "/anime/1/watch?ep=2")',
       "Library did not link to the next released episode",
+    );
+
+    await navigate(`${origin}/anime/1/watch?ep=3`);
+    await ready();
+    const player = 'document.querySelector("fieldset")';
+    const seekForward = `${player}.querySelector('button[aria-label="Tua tới 10 giây"]')`;
+    const seekBack = `${player}.querySelector('button[aria-label="Tua lùi 10 giây"]')`;
+    const controlsAreVisible = `Boolean(${seekForward}?.closest(".opacity-100"))`;
+    const atTime = (time) =>
+      wait(
+        `Math.abs(${video}.currentTime - ${time}) < 0.5`,
+        `Video did not seek to ${time}s`,
+      );
+    const pressArrow = async (key, windowsVirtualKeyCode) => {
+      await send("Input.dispatchKeyEvent", {
+        type: "rawKeyDown",
+        key,
+        code: key,
+        windowsVirtualKeyCode,
+      });
+      await send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key,
+        code: key,
+        windowsVirtualKeyCode,
+      });
+    };
+    await wait(
+      `!${controlsAreVisible}`,
+      "Idle controls obscured a paused video",
+    );
+    await pressArrow("ArrowRight", 39);
+    await atTime(10);
+    await evaluate(`${seekForward}.focus()`);
+    await pressArrow("ArrowLeft", 37);
+    await atTime(0);
+    await wait(
+      `!${controlsAreVisible}`,
+      "Focus kept the player controls visible indefinitely",
+    );
+
+    await evaluate(
+      `${player}.scrollIntoView({ block: "center", behavior: "instant" })`,
+    );
+    const scrub = `${player}.querySelector('[aria-label="Vị trí phát video"]')`;
+    const pointAt = (selector, ratio) =>
+      evaluate(`(() => {
+      const rect = ${selector}.getBoundingClientRect();
+      return { x: rect.left + rect.width * ${ratio}, y: rect.top + rect.height / 2 };
+    })()`);
+    const moveMouse = async (selector, ratio) => {
+      await send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        ...(await pointAt(selector, ratio)),
+      });
+    };
+    const previewAt = (time) =>
+      wait(
+        `[...document.querySelectorAll('video')].slice(1).some(video =>
+        video.classList.contains("opacity-100") && Math.abs(video.currentTime - ${time}) < 0.5)`,
+        `Timeline did not preview the frame at ${time}s`,
+      ).catch(async (error) => {
+        const details =
+          await evaluate(`[...document.querySelectorAll("video")].map(video => ({
+          time: video.currentTime, duration: video.duration, ready: video.readyState,
+          seeking: video.seeking, error: video.error?.message, className: video.className,
+        }))`);
+        throw new Error(`${error.message}: ${JSON.stringify(details)}`);
+      });
+    await moveMouse(player, 0.5);
+    await wait(
+      controlsAreVisible,
+      "Pointer movement did not reveal the controls",
+    );
+    await moveMouse(scrub, 0.5);
+    await previewAt(16);
+    await moveMouse(scrub, 0.75);
+    await previewAt(24);
+    await atTime(0);
+    await moveMouse(player, 0.5);
+    await wait(
+      'document.querySelectorAll("video").length === 1',
+      "Preview video was not released on pointer leave",
+    );
+
+    await evaluate(
+      `document.querySelector('button[aria-label="Phát"]').click()`,
+    );
+    await wait(`!${video}.paused`, "Video did not start");
+    await wait(
+      `!${controlsAreVisible}`,
+      "Controls stayed visible during idle playback",
+    );
+    await evaluate(`(() => { ${video}.pause(); ${video}.currentTime = 0; })()`);
+
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+    });
+    await send("Emulation.setTouchEmulationEnabled", { enabled: true });
+    const tap = async (selector) => {
+      const point = await evaluate(`(() => {
+        const rect = ${selector}.getBoundingClientRect();
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      })()`);
+      await send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [point],
+      });
+      await send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+    };
+    await evaluate(
+      `${player}.scrollIntoView({ block: "center", behavior: "instant" })`,
+    );
+    await tap(player);
+    await wait(controlsAreVisible, "Touch did not reveal hidden controls");
+    await tap(seekForward);
+    await atTime(10);
+    await tap(seekBack);
+    await atTime(0);
+    await wait(
+      `!${controlsAreVisible}`,
+      "Mobile overlay stayed visible after seeking",
+    );
+    await tap(player);
+    await wait(controlsAreVisible, "Touch did not reveal the timeline");
+    await send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [await pointAt(scrub, 0.5)],
+    });
+    await previewAt(16);
+    await atTime(0);
+    await send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await atTime(16);
+    await wait(
+      'document.querySelectorAll("video").length === 1',
+      "Touch preview stayed mounted after release",
     );
   });
   console.log("Player regression checks passed");

@@ -67,6 +67,7 @@ export async function withChrome(test) {
       });
     try {
       await test({
+        send,
         navigate: (url) => send("Page.navigate", { url }),
         evaluate: async (expression) => {
           const { result, exceptionDetails } = await send("Runtime.evaluate", {

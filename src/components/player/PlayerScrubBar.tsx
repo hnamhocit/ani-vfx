@@ -4,12 +4,16 @@ import type React from "react";
 import { useCallback, useRef, useState } from "react";
 import { formatTime } from "@/utils/date-time";
 
+import { PlayerSeekPreview } from "./PlayerSeekPreview";
+
 interface PlayerScrubBarProps {
+  src: string;
   currentTime: number;
   duration: number;
   buffered: number;
   isDragging: boolean;
   dragTime: number;
+  onPreviewHover: (hovered: boolean) => void;
   onDragStart: (time: number) => void;
   onDragMove: (time: number) => void;
   onDragEnd: (time: number) => void;
@@ -17,19 +21,22 @@ interface PlayerScrubBarProps {
 }
 
 export function PlayerScrubBar({
+  src,
   currentTime,
   duration,
   buffered,
   isDragging,
   dragTime,
+  onPreviewHover,
   onDragStart,
   onDragMove,
   onDragEnd,
   onDragCancel,
 }: PlayerScrubBarProps) {
   const barRef = useRef<HTMLDivElement | null>(null);
-  const [hoverTime, setHoverTime] = useState<number | null>(null);
-  const [hoverPercent, setHoverPercent] = useState(0);
+  const [hover, setHover] = useState<{ time: number; percent: number } | null>(
+    null,
+  );
 
   const getScrubInfo = useCallback(
     (clientX: number) => {
@@ -49,18 +56,20 @@ export function PlayerScrubBar({
     e.stopPropagation();
     if (!duration) return;
     e.currentTarget.setPointerCapture(e.pointerId);
-    const { time } = getScrubInfo(e.clientX);
-    onDragStart(time);
+    const preview = getScrubInfo(e.clientX);
+    setHover(preview);
+    onDragStart(preview.time);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    const { time, percent } = getScrubInfo(e.clientX);
-    setHoverTime(time);
-    setHoverPercent(percent);
-    if (isDragging) {
-      onDragMove(time);
-    }
+    if (
+      e.pointerType !== "mouse" &&
+      !e.currentTarget.hasPointerCapture(e.pointerId)
+    )
+      return;
+    const preview = getScrubInfo(e.clientX);
+    setHover(preview);
+    if (isDragging) onDragMove(preview.time);
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -68,6 +77,7 @@ export function PlayerScrubBar({
     if (!isDragging) return;
     const { time } = getScrubInfo(e.clientX);
     onDragEnd(time);
+    if (e.pointerType !== "mouse") setHover(null);
   };
 
   const displayedTime = isDragging ? dragTime : currentTime;
@@ -81,7 +91,7 @@ export function PlayerScrubBar({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={() => {
-        setHoverTime(null);
+        setHover(null);
         onDragCancel();
       }}
       role="slider"
@@ -117,19 +127,16 @@ export function PlayerScrubBar({
         event.preventDefault();
         onDragEnd(time);
       }}
+      onPointerEnter={(event) => {
+        if (duration && event.pointerType === "mouse") onPreviewHover(true);
+      }}
       onPointerLeave={() => {
-        if (!isDragging) setHoverTime(null);
+        onPreviewHover(false);
+        if (!isDragging) setHover(null);
       }}
       className="group/scrub relative flex items-center h-5 cursor-pointer touch-none"
     >
-      {hoverTime !== null && duration > 0 && (
-        <div
-          className="absolute -top-7 -translate-x-1/2 px-2 py-0.5 rounded bg-black/90 text-white font-mono text-[11px] font-bold border border-white/15 pointer-events-none shadow-md"
-          style={{ left: `${Math.min(Math.max(hoverPercent, 4), 96)}%` }}
-        >
-          {formatTime(hoverTime)}
-        </div>
-      )}
+      {hover && duration > 0 && <PlayerSeekPreview src={src} {...hover} />}
 
       <div className="relative w-full h-1 group-hover/scrub:h-1.5 transition-all rounded-full bg-white/25 overflow-hidden">
         <div
