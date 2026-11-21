@@ -211,14 +211,12 @@ export const useWatchStore = create<WatchState>((set, get) => ({
           streamLoading: false,
         });
       } else {
-        const hasTrailer = Boolean(anime.trailer?.id);
         set({
           streamServers: [],
           activeServer: null,
-          isTrailerMode: hasTrailer,
-          streamError: hasTrailer
-            ? null
-            : res.message || `Chưa tìm thấy nguồn cho Tập ${currentEpisode}.`,
+          isTrailerMode: false,
+          streamError:
+            res.message || `Chưa tìm thấy nguồn cho Tập ${currentEpisode}.`,
           streamLoading: false,
         });
       }
@@ -229,12 +227,11 @@ export const useWatchStore = create<WatchState>((set, get) => ({
         get().currentEpisode !== currentEpisode
       )
         return;
-      const hasTrailer = Boolean(anime.trailer?.id);
       set({
         streamServers: [],
         activeServer: null,
-        isTrailerMode: hasTrailer,
-        streamError: hasTrailer ? null : "Không có kết nối mạng.",
+        isTrailerMode: false,
+        streamError: "Không có kết nối mạng.",
         streamLoading: false,
       });
     }

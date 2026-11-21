@@ -1,4 +1,3 @@
-import { ExternalLink, Tv } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CustomVideoPlayer } from "@/components/player/CustomVideoPlayer";
 import { PlayerLoading } from "@/components/player/PlayerLoading";
@@ -15,14 +14,17 @@ import {
 } from "./WatchPlaybackPrompts";
 import { WatchReminder } from "./WatchReminder";
 import { WatchSourceError } from "./WatchSourceError";
+import { WatchUnavailablePanel } from "./WatchUnavailablePanel";
 import { WatchUpcomingPanel } from "./WatchUpcomingPanel";
 
 export function WatchPlayerSection({
   seasonList,
   source,
+  onRetryStream,
 }: {
   seasonList: AnimeSeasonItem[];
   source: ReturnType<typeof useWatchSource>;
+  onRetryStream: () => void;
 }) {
   const playerRef = useRef<HTMLDivElement | null>(null);
   const { videoRef, checkpoint } = source;
@@ -224,26 +226,11 @@ export function WatchPlayerSection({
           poster={bannerImage}
         />
       ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950 text-zinc-300 space-y-4">
-          <Tv className="w-12 h-12 text-zinc-600" />
-          <div>
-            <h3 className="text-base sm:text-lg font-bold text-white">
-              Chưa có nguồn stream tự động cho tập này
-            </h3>
-            <p className="text-xs sm:text-sm text-zinc-400 max-w-md mt-1">
-              {streamError || "Vui lòng thử chọn máy chủ khác."}
-            </p>
-          </div>
-          <a
-            href={`https://www.google.com/search?q=${encodeURIComponent(`${displayTitle} tập ${currentEpisode} vietsub`)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs sm:text-sm shadow-md"
-          >
-            <span>Tìm xem trên Google</span>
-            <ExternalLink className="w-4 h-4" />
-          </a>
-        </div>
+        <WatchUnavailablePanel
+          error={streamError}
+          links={anime.externalLinks ?? []}
+          onRetry={onRetryStream}
+        />
       )}
 
       {activeServer &&

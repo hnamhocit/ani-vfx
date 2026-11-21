@@ -143,6 +143,7 @@ test("combined provider releases map only the verified part window", async () =>
     ],
   ]);
   let available = 22;
+  let declared = 22;
   globalThis.fetch = async (input, options) => {
     const url = String(input);
     if (url.includes("graphql.anilist.co")) {
@@ -159,7 +160,7 @@ test("combined provider releases map only the verified part window", async () =>
       movie: {
         origin_name: wrong ? "Example" : "Example (Season 3)",
         year: 2018,
-        episode_total: wrong ? 25 : 22,
+        episode_total: wrong ? 25 : declared,
       },
       episodes: [
         {
@@ -198,4 +199,59 @@ test("combined provider releases map only the verified part window", async () =>
   );
   available = 21;
   expect((await resolve(12, 1)).success).toBe(false);
+
+  const renamedFirst = {
+    ...first,
+    title: { english: "Example Final Season" },
+    synonyms: ["Example Season 3"],
+  };
+  const renamedSecond = {
+    ...second,
+    title: { english: "Example Final Season Part 2" },
+  };
+  const special1 = {
+    ...release(
+      13,
+      "Example Final Season THE FINAL CHAPTERS Special 1",
+      2020,
+      1,
+    ),
+    format: "SPECIAL",
+  };
+  const special2 = {
+    ...release(
+      14,
+      "Example Final Season THE FINAL CHAPTERS Special 2",
+      2020,
+      1,
+    ),
+    format: "SPECIAL",
+  };
+  refs.set(11, {
+    ...renamedFirst,
+    relations: { edges: [{ relationType: "SEQUEL", node: renamedSecond }] },
+  });
+  refs.set(12, {
+    ...renamedSecond,
+    relations: {
+      edges: [
+        { relationType: "PREQUEL", node: renamedFirst },
+        { relationType: "SEQUEL", node: special1 },
+      ],
+    },
+  });
+  refs.set(13, {
+    ...special1,
+    relations: { edges: [{ relationType: "SEQUEL", node: special2 }] },
+  });
+  refs.set(14, special2);
+  declared = available = 24;
+
+  expect((await resolve(11, 2)).servers[0].m3u8Url).toEndWith(
+    "/combined/episode-2.m3u8",
+  );
+  expect((await resolve(12, 1)).servers[0].m3u8Url).toEndWith(
+    "/combined/episode-13.m3u8",
+  );
+  expect((await resolve(12, 11)).success).toBe(false);
 });

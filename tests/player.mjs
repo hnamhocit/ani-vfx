@@ -22,6 +22,7 @@ const next = spawn(
 );
 
 let failPrimary = true;
+let failStreamLookup = false;
 let requestedEpisode2 = false;
 let completedEpisode2 = false;
 let primaryManifestRequests = 0;
@@ -31,6 +32,18 @@ const proxy = createServer(async (incoming, outgoing) => {
   const url = new URL(incoming.url, origin);
   if (url.pathname === "/api/stream") {
     const episode = Number(url.searchParams.get("episode"));
+    if (failStreamLookup) {
+      outgoing.setHeader("Content-Type", "application/json");
+      outgoing.end(
+        JSON.stringify({
+          success: false,
+          episode,
+          servers: [],
+          message: "Nguồn đang gián đoạn",
+        }),
+      );
+      return;
+    }
     if (episode === 2) {
       requestedEpisode2 = true;
       await sleep(2800);
@@ -426,6 +439,20 @@ try {
     );
     assert.equal(await evaluate(`${video}.paused`), false);
     assert.equal(await evaluate(fullscreenStillActive), true);
+
+    failStreamLookup = true;
+    await navigate(`${origin}/anime/1/watch?ep=1`);
+    await wait(
+      `document.querySelector('a[href="https://example.test/series"]') !== null`,
+      "Official streaming link did not appear without an HLS source",
+    );
+    assert.equal(
+      await evaluate('document.querySelector("iframe[src*=youtube]") === null'),
+      true,
+    );
+    failStreamLookup = false;
+    await click(button("Thử lại"));
+    await ready();
   });
   console.log("Player regression checks passed");
 } finally {

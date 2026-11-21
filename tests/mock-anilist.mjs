@@ -5,6 +5,14 @@ const anime = {
   status: "FINISHED",
   title: { romaji: "Fixture Anime" },
   episodes: 3,
+  trailer: { site: "youtube", id: "invalid-test-trailer" },
+  externalLinks: [
+    {
+      site: "Official catalogue",
+      type: "STREAMING",
+      url: "https://example.test/series",
+    },
+  ],
   characters: { edges: [] },
   recommendations: { nodes: [] },
   relations: { edges: [] },

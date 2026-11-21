@@ -7,6 +7,7 @@ export interface AnimeMeta extends AnimeReleaseInfo {
   romaji: string | null;
   english: string | null;
   native: string | null;
+  synonyms?: string[];
   format: string | null;
   seasonYear: number | null;
   neighbors?: { relationType: AniListRelationType; node: AnimeMeta }[];
@@ -14,6 +15,7 @@ export interface AnimeMeta extends AnimeReleaseInfo {
 
 const RELEASE_FIELDS = `id title { romaji english native } episodes status format seasonYear startDate { year }`;
 type RawMedia = AniListRelationNode & {
+  synonyms?: string[] | null;
   nextAiringEpisode?: { episode: number } | null;
 };
 
@@ -23,6 +25,7 @@ function toMeta(media: RawMedia): AnimeMeta {
     romaji: media.title?.romaji ?? null,
     english: media.title?.english ?? null,
     native: media.title?.native ?? null,
+    synonyms: media.synonyms ?? [],
     episodes: media.episodes ?? null,
     nextAiringEpisode: media.nextAiringEpisode,
     status: media.status,
@@ -49,6 +52,7 @@ export async function fetchAnimeMeta(id: number): Promise<AnimeMeta | null> {
       query ($id: Int) {
         Media(id: $id, type: ANIME) {
           ${RELEASE_FIELDS}
+          synonyms
           nextAiringEpisode { episode }
           relations { edges { relationType node { type ${RELEASE_FIELDS} } } }
         }

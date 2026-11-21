@@ -2,7 +2,7 @@
 
 import { AlertCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Footer } from "@/components/Footer";
 import { Navbar } from "@/components/Navbar";
 import { SeasonGrid } from "@/components/SeasonGrid";
@@ -40,18 +40,25 @@ export function AnimeWatchClient({
   const source = useWatchSource(id, currentEpisode);
 
   const fetchWatchData = useWatchStore((s) => s.fetchWatchData);
+  const streamRequest = useRef<AbortController | null>(null);
   const fetchStream = useWatchStore((s) => s.fetchStream);
 
   useEffect(() => {
     fetchWatchData(id, initialEpisode, addToHistory);
   }, [id, initialEpisode, addToHistory, fetchWatchData]);
 
+  const loadStream = useCallback(() => {
+    streamRequest.current?.abort();
+    const controller = new AbortController();
+    streamRequest.current = controller;
+    void fetchStream(currentEpisode, getProgress, controller.signal);
+  }, [currentEpisode, fetchStream, getProgress]);
+
   useEffect(() => {
     if (!anime || isLoading) return;
-    const controller = new AbortController();
-    fetchStream(currentEpisode, getProgress, controller.signal);
-    return () => controller.abort();
-  }, [anime, currentEpisode, isLoading, fetchStream, getProgress]);
+    loadStream();
+    return () => streamRequest.current?.abort();
+  }, [anime, isLoading, loadStream]);
 
   const seasonList = useMemo(() => buildAnimeSeasons(relations), [relations]);
 
@@ -98,7 +105,11 @@ export function AnimeWatchClient({
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start">
           <div className="lg:col-span-8 space-y-5 sm:space-y-6">
-            <WatchPlayerSection seasonList={seasonList} source={source} />
+            <WatchPlayerSection
+              seasonList={seasonList}
+              source={source}
+              onRetryStream={loadStream}
+            />
             <WatchControlBar source={source} />
             <WatchInfoHeader />
             <SeasonGrid

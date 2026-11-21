@@ -5,7 +5,11 @@ import {
   localEpisode,
   numberedEpisodes,
 } from "./provider-episodes";
-import { matchesTitle, releaseTitles } from "./release-identity";
+import {
+  matchesTitle,
+  providerAliases,
+  releaseTitles,
+} from "./release-identity";
 import type { SplitRelease } from "./split-release";
 
 interface PhimEpisodeData {
@@ -68,10 +72,10 @@ function resolveProviderEpisode(
     split &&
     split.year &&
     detail.year === split.year &&
-    detail.episodeTotal === split.total &&
+    split.totals.includes(detail.episodeTotal) &&
     matchesTitle(titles, split.titles)
   ) {
-    const first = completeRangeStart(index, split.total);
+    const first = completeRangeStart(index, detail.episodeTotal);
     if (first !== null && (!meta.episodes || episode <= meta.episodes)) {
       const entry = index.get(first + split.offset + episode - 1);
       if (entry) return { entry, priority: 1 };
@@ -79,7 +83,14 @@ function resolveProviderEpisode(
     return null;
   }
 
-  if (!matchesTitle(titles, releaseTitles(meta))) return null;
+  const exactTitle = matchesTitle(titles, releaseTitles(meta));
+  const verifiedAlias =
+    meta.seasonYear === detail.year &&
+    Boolean(meta.episodes) &&
+    detail.episodeTotal === meta.episodes &&
+    completeRangeStart(index, detail.episodeTotal) !== null &&
+    matchesTitle(titles, providerAliases(meta));
+  if (!exactTitle && !verifiedAlias) return null;
   if (
     meta.seasonYear &&
     detail.year &&

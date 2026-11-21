@@ -34,3 +34,12 @@ export function splitTitle(title: string) {
     ? { base: match[1].trim(), part: Number(match[2]) }
     : { base: title, part: null };
 }
+
+export function providerAliases(media: AnimeMeta) {
+  return [
+    ...(media.synonyms ?? []),
+    ...releaseTitles(media)
+      .filter((title) => !/\b(?:season|part|cour)\b/i.test(title))
+      .map((title) => `${title} Season 1`),
+  ];
+}

@@ -1,6 +1,14 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Clock, Film, Play } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Film,
+  LoaderCircle,
+  Play,
+  Server,
+} from "lucide-react";
 import { useUserStore } from "@/store/useUserStore";
 import { useWatchStore } from "@/store/useWatchStore";
 import {
@@ -9,6 +17,8 @@ import {
   isAnimeUpcoming,
 } from "@/utils/anime";
 
+import type { useWatchSource } from "./useWatchSource";
+
 interface WatchControlBarAnime extends AnimeReleaseInfo {
   trailer?: {
     id?: string | null;
@@ -16,7 +26,15 @@ interface WatchControlBarAnime extends AnimeReleaseInfo {
   } | null;
 }
 
-import type { useWatchSource } from "./useWatchSource";
+const focusClass =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
+const buttonClass = `inline-flex min-h-11 cursor-pointer sm:min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:text-sm ${focusClass}`;
+const utilityClass = `${buttonClass} border border-white/10 bg-white/[0.035] text-zinc-300 hover:bg-white/10 hover:text-white aria-pressed:border-violet-400/40 aria-pressed:bg-violet-500/15 aria-pressed:text-violet-100`;
+
+const playerModes = [
+  { id: "hls", label: "HLS" },
+  { id: "iframe", label: "Embed" },
+] as const;
 
 export function WatchControlBar({
   source,
@@ -48,145 +66,144 @@ export function WatchControlBar({
   );
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-[#111320] border border-purple-500/20 shadow-lg">
+    <div className="@container rounded-2xl border border-white/10 bg-[#12141e] px-3 py-2.5 shadow-sm shadow-black/25 sm:px-4">
       {isUpcoming ? (
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <span className="text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-3 py-2 rounded-xl flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>Phần phim chưa phát sóng chính thức</span>
-          </span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <p className="flex items-center gap-2 text-xs font-semibold text-amber-200 sm:text-sm">
+            <Clock
+              aria-hidden="true"
+              className="size-4 shrink-0 text-amber-400"
+            />
+            Phần phim chưa phát sóng chính thức
+          </p>
           {hasTrailer && (
             <button
               type="button"
+              aria-pressed={isTrailerMode}
               onClick={source.enableTrailerMode}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-                isTrailerMode
-                  ? "bg-[#7950f2] text-white shadow-md border border-purple-400"
-                  : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-              }`}
+              className={utilityClass}
             >
-              <Film className="w-3.5 h-3.5" />
-              <span>Xem Official Trailer</span>
+              <Film aria-hidden="true" className="size-4" />
+              Xem trailer
             </button>
           )}
         </div>
       ) : (
-        <>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider shrink-0 mr-0.5 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Máy chủ:
+        <div className="flex flex-col gap-2.5 @min-[52rem]:flex-row @min-[52rem]:items-center @min-[52rem]:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold text-zinc-400">
+              <Server aria-hidden="true" className="size-4 text-zinc-500" />
+              Máy chủ
             </span>
 
             {streamServers.length > 0 ? (
-              streamServers.map((server) => {
-                const isActive =
-                  !isTrailerMode && activeServer?.id === server.id;
-                return (
-                  <button
-                    key={server.id}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => source.selectServer(server)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-                      isActive
-                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 border border-emerald-400"
-                        : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-                    }`}
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>{server.serverName}</span>
-                  </button>
-                );
-              })
+              streamServers.map((server) => (
+                <button
+                  key={server.id}
+                  type="button"
+                  aria-pressed={
+                    !isTrailerMode && activeServer?.id === server.id
+                  }
+                  onClick={() => source.selectServer(server)}
+                  className={`${buttonClass} max-w-full border border-white/10 bg-white/[0.035] text-zinc-300 hover:bg-white/10 aria-pressed:border-emerald-400/30 aria-pressed:bg-emerald-400/10 aria-pressed:text-emerald-200`}
+                >
+                  <Play
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 fill-current"
+                  />
+                  <span className="truncate">{server.serverName}</span>
+                </button>
+              ))
             ) : (
-              <span className="text-xs font-semibold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-3 py-1.5 rounded-lg">
+              <output className="inline-flex min-h-10 items-center gap-2 text-xs font-medium text-zinc-400">
+                {streamLoading && (
+                  <LoaderCircle
+                    aria-hidden="true"
+                    className="size-4 text-violet-300 motion-safe:animate-spin"
+                  />
+                )}
                 {streamLoading ? "Đang tìm nguồn phát…" : "Chưa có máy chủ"}
-              </span>
+              </output>
             )}
 
             {activeServer?.m3u8Url &&
               activeServer.embedUrl &&
               !isTrailerMode && (
-                <div className="flex items-center bg-[#1a1d2e] border border-purple-500/20 rounded-xl p-0.5">
-                  <button
-                    type="button"
-                    aria-pressed={playerMode === "hls"}
-                    onClick={() => source.setPlayerMode("hls")}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
-                      playerMode === "hls"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    HLS
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={playerMode === "iframe"}
-                    onClick={() => source.setPlayerMode("iframe")}
-                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
-                      playerMode === "iframe"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "text-zinc-400 hover:text-white"
-                    }`}
-                  >
-                    Embed
-                  </button>
-                </div>
+                <fieldset
+                  aria-label="Chế độ phát"
+                  className="flex shrink-0 items-center rounded-lg border border-white/10 bg-[#090b13] p-0.5"
+                >
+                  {playerModes.map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={playerMode === id}
+                      onClick={() => source.setPlayerMode(id)}
+                      className={`min-h-10 cursor-pointer sm:min-h-9 rounded-md px-2.5 text-xs font-semibold text-zinc-400 transition-colors hover:text-white aria-pressed:bg-violet-500/20 aria-pressed:text-violet-100 ${focusClass}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </fieldset>
               )}
 
             {hasTrailer && (
               <button
                 type="button"
+                aria-pressed={isTrailerMode}
                 onClick={source.enableTrailerMode}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
-                  isTrailerMode
-                    ? "bg-[#7950f2] text-white shadow-md border border-purple-400"
-                    : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-                }`}
+                className={utilityClass}
               >
-                <Film className="w-3.5 h-3.5" />
-                <span>Trailer</span>
+                <Film aria-hidden="true" className="size-4" />
+                Trailer
               </button>
             )}
           </div>
 
-          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-200">
-            <input
-              type="checkbox"
-              checked={autoPlayNextEpisode}
-              onChange={(event) => {
-                setAutoPlayNextEpisode(event.currentTarget.checked);
-                if (!event.currentTarget.checked)
-                  useWatchStore.getState().setNextEpisodeCountdown(null);
-              }}
-              className="size-4 accent-purple-500"
-            />
-            Tự phát tập tiếp theo
-          </label>
-          <div className="flex items-center gap-2 shrink-0 ml-auto">
-            <button
-              type="button"
-              disabled={currentEpisode <= 1}
-              onClick={() => selectEpisode(currentEpisode - 1)}
-              className="flex items-center gap-1 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#1a1d2e] hover:bg-[#252a42] disabled:opacity-40 text-xs sm:text-sm font-bold text-zinc-200 border border-purple-500/20 transition cursor-pointer disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span>Tập trước</span>
-            </button>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-white/10 pt-2.5 @min-[52rem]:shrink-0 @min-[52rem]:border-t-0 @min-[52rem]:border-l @min-[52rem]:pt-0 @min-[52rem]:pl-3">
+            <label className="inline-flex min-h-11 cursor-pointer sm:min-h-10 items-center gap-2 text-xs font-medium text-zinc-300">
+              <input
+                type="checkbox"
+                checked={autoPlayNextEpisode}
+                onChange={(event) => {
+                  setAutoPlayNextEpisode(event.currentTarget.checked);
+                  if (!event.currentTarget.checked)
+                    useWatchStore.getState().setNextEpisodeCountdown(null);
+                }}
+                className="peer sr-only"
+              />
+              <span
+                aria-hidden="true"
+                className="relative h-5 w-9 shrink-0 rounded-full bg-zinc-700 transition-colors after:absolute after:top-0.5 after:left-0.5 after:size-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-violet-600 peer-checked:after:translate-x-4 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-violet-300"
+              />
+              Tự phát tập tiếp theo
+            </label>
 
-            <button
-              type="button"
-              disabled={currentEpisode >= totalEpisodes}
-              onClick={() => selectEpisode(currentEpisode + 1)}
-              className="flex items-center gap-1 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#1a1d2e] hover:bg-[#252a42] disabled:opacity-40 text-xs sm:text-sm font-bold text-zinc-200 border border-purple-500/20 transition cursor-pointer disabled:cursor-not-allowed"
+            <fieldset
+              aria-label="Chuyển tập"
+              className="flex shrink-0 items-center gap-1.5"
             >
-              <span>Tập tiếp</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                disabled={currentEpisode <= 1}
+                onClick={() => selectEpisode(currentEpisode - 1)}
+                className={utilityClass}
+              >
+                <ChevronLeft aria-hidden="true" className="size-4" />
+                Tập trước
+              </button>
+              <button
+                type="button"
+                disabled={currentEpisode >= totalEpisodes}
+                onClick={() => selectEpisode(currentEpisode + 1)}
+                className={`${buttonClass} border border-violet-400/30 bg-violet-500/15 text-violet-100 enabled:hover:bg-violet-500/30`}
+              >
+                Tập tiếp
+                <ChevronRight aria-hidden="true" className="size-4" />
+              </button>
+            </fieldset>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

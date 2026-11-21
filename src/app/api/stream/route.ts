@@ -81,8 +81,13 @@ export async function GET(request: NextRequest) {
   }
 
   const split = await resolveSplitRelease(meta);
+  const aliases =
+    split?.titles
+      .filter((title) => /\bseason\s*\d+\s*$/i.test(title))
+      .slice(0, 3) ?? [];
+  const providerQueries = [...new Set([...candidates, ...aliases])];
   const [phimResult, consumetServers] = await Promise.all([
-    getPhimApiStreams(candidates, episode, meta, split),
+    getPhimApiStreams(providerQueries, episode, meta, split),
     getConsumetStreams(
       candidates[0] || titleParam || englishTitleParam,
       episode,

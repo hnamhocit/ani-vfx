@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchMediaById, MEDIA_CARD_FIELDS } from "./graphql";
 
 export async function getFull(id: number) {
-  const media = await fetchMediaById(id);
+  const media = await fetchMediaById(id, "externalLinks { site url type }");
   if (!media) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
