@@ -6,12 +6,14 @@ import { useUserStore } from "@/store/useUserStore";
 import { useWatchStore } from "@/store/useWatchStore";
 import type { AnimeSeasonItem } from "@/types/anilist";
 import { getReleasedEpisodeCount, isAnimeUpcoming } from "@/utils/anime";
+import { useWatchReminder } from "./useWatchReminder";
 import type { useWatchSource } from "./useWatchSource";
 import {
   WatchNextEpisodeHint,
   WatchNextEpisodePrompt,
   WatchResumePrompt,
 } from "./WatchPlaybackPrompts";
+import { WatchReminder } from "./WatchReminder";
 import { WatchSourceError } from "./WatchSourceError";
 import { WatchUpcomingPanel } from "./WatchUpcomingPanel";
 
@@ -52,6 +54,8 @@ export function WatchPlayerSection({
     (s) => s.setNextEpisodeCountdown,
   );
   const decrementCountdown = useWatchStore((s) => s.decrementCountdown);
+
+  const watchReminder = useWatchReminder(videoRef);
 
   useEffect(() => {
     if (scrollTrigger > 0 && document.fullscreenElement !== playerRef.current) {
@@ -278,6 +282,7 @@ export function WatchPlayerSection({
           onReplay={handleReplayEpisode}
         />
       )}
+      {watchReminder !== null && <WatchReminder minutes={watchReminder} />}
     </div>
   );
 }

@@ -372,6 +372,60 @@ try {
       `${video}.currentTime > 0.25`,
       "The new episode did not advance on its own",
     );
+
+    const fullscreenStillActive =
+      "document.fullscreenElement === window.fullscreenBeforeSwitch";
+    for (const [label, targetEpisode] of [
+      ["Tập trước", 1],
+      ["Tập tiếp theo", 2],
+    ]) {
+      await click(`${player}.querySelector('button[aria-label="${label}"]')`);
+      await wait(
+        `${player}?.getAttribute("aria-label").startsWith("Tập ${targetEpisode}") && !${video}?.paused`,
+        `${label} did not start playback`,
+      );
+      assert.equal(
+        await evaluate(fullscreenStillActive),
+        true,
+        `${label} exited fullscreen`,
+      );
+    }
+
+    const storageKey = "anivfx-daily-watch-time";
+    const seedWatchTime = (minutes) =>
+      evaluate(`(() => {
+      const now = new Date();
+      const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()].join("-");
+      localStorage.setItem(${JSON.stringify(storageKey)}, JSON.stringify({
+        day, watchedMs: ${minutes} * 60_000 - 500,
+      }));
+    })()`);
+    const reminder = (minutes) =>
+      `document.fullscreenElement?.textContent.includes("Bạn đã xem ${minutes} phút hôm nay") === true`;
+    await evaluate(`${video}.pause()`);
+    await seedWatchTime(180);
+    await sleep(1500);
+    assert.equal(
+      await evaluate(reminder(180)),
+      false,
+      "Paused video counted toward watch time",
+    );
+    await evaluate(`${video}.play()`);
+    await wait(reminder(180), "The 180-minute reminder did not appear");
+    assert.equal(await evaluate(`${video}.paused`), false);
+    assert.equal(await evaluate(fullscreenStillActive), true);
+    await seedWatchTime(360);
+    await wait(reminder(360), "The second daily reminder did not appear");
+    await wait(`!${reminder(360)}`, "The reminder did not dismiss itself");
+    await seedWatchTime(540);
+    await sleep(1500);
+    assert.equal(
+      await evaluate(reminder(540)),
+      false,
+      "A third reminder appeared on the same day",
+    );
+    assert.equal(await evaluate(`${video}.paused`), false);
+    assert.equal(await evaluate(fullscreenStillActive), true);
   });
   console.log("Player regression checks passed");
 } finally {
