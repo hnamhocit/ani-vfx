@@ -19,6 +19,34 @@ const RELATION_LABELS: Record<string, string> = {
   SPIN_OFF: "Spin-off",
 };
 
+function SeasonCardDetails({ season }: { season: AnimeSeasonItem }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      {season.coverImage && (
+        <img
+          src={season.coverImage}
+          alt=""
+          width={42}
+          height={60}
+          loading="lazy"
+          decoding="async"
+          className="h-[60px] w-[42px] shrink-0 rounded-md bg-zinc-800 object-cover"
+        />
+      )}
+      <div className="min-w-0">
+        <p className="line-clamp-2 text-xs font-bold leading-snug text-white sm:text-sm">
+          {season.title}
+        </p>
+        {typeof season.episodes === "number" && season.episodes > 0 && (
+          <p className="mt-1 text-[11px] text-zinc-400">
+            {season.episodes} tập
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SeasonGrid({
   seasonList,
   currentAnimeId,
@@ -128,9 +156,7 @@ export function SeasonGrid({
                   </span>
                 </div>
                 <div>
-                  <p className="text-xs sm:text-sm font-semibold text-zinc-400 line-clamp-2 leading-snug">
-                    {season.title}
-                  </p>
+                  <SeasonCardDetails season={season} />
                   {metaSuffix && (
                     <span className="text-[11px] text-zinc-500 mt-1 block">
                       {metaSuffix}
@@ -157,9 +183,7 @@ export function SeasonGrid({
                   </span>
                 ) : null}
               </div>
-              <p className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug">
-                {season.title}
-              </p>
+              <SeasonCardDetails season={season} />
             </>
           );
 

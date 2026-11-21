@@ -42,15 +42,14 @@ export function WatchControlBar({
   const isUpcoming = isAnimeUpcoming(anime, episodes.length);
   const totalEpisodes = isUpcoming
     ? 0
-    : (getReleasedEpisodeCount(anime) ??
-      (episodes.length || anime.episodes || 0));
+    : (getReleasedEpisodeCount(anime) ?? episodes.length);
   const hasTrailer = Boolean(
     anime.trailer?.site === "youtube" && anime.trailer?.id,
   );
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-[#111320] border border-purple-500/20 shadow-lg">
-      {isUpcoming || totalEpisodes === 0 ? (
+      {isUpcoming ? (
         <div className="flex items-center gap-2.5 flex-wrap">
           <span className="text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-500/40 px-3 py-2 rounded-xl flex items-center gap-2">
             <Clock className="w-4 h-4 text-amber-400 shrink-0" />

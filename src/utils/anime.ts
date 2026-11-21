@@ -12,7 +12,7 @@ export function isAnimeUpcoming(
 ) {
   return (
     anime?.status === "NOT_YET_RELEASED" ||
-    (episodeCount === 0 && !anime?.episodes)
+    (!anime?.status && episodeCount === 0 && !anime?.episodes)
   );
 }
 
@@ -24,7 +24,18 @@ export interface AnimeReleaseInfo {
 
 export function getReleasedEpisodeCount(anime: AnimeReleaseInfo | null) {
   if (anime?.status === "NOT_YET_RELEASED") return 0;
-  if (anime?.nextAiringEpisode)
-    return Math.max(0, anime.nextAiringEpisode.episode - 1);
-  return anime?.status === "FINISHED" ? (anime.episodes ?? null) : null;
+  const declared = anime?.episodes;
+  const total =
+    typeof declared === "number" &&
+    Number.isSafeInteger(declared) &&
+    declared > 0
+      ? declared
+      : null;
+  if (anime?.status === "FINISHED" && total !== null) return total;
+
+  const next = anime?.nextAiringEpisode?.episode;
+  if (typeof next === "number" && Number.isSafeInteger(next) && next > 0) {
+    return total === null ? next - 1 : Math.min(total, next - 1);
+  }
+  return null;
 }

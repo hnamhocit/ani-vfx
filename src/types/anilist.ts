@@ -5,35 +5,35 @@
 
 // ─── Enums / Union Types ────────────────────────────────────────────────
 export type AniListRelationType =
-  | 'ADAPTATION'
-  | 'PREQUEL'
-  | 'SEQUEL'
-  | 'PARENT'
-  | 'SIDE_STORY'
-  | 'CHARACTER'
-  | 'SUMMARY'
-  | 'ALTERNATIVE'
-  | 'SPIN_OFF'
-  | 'OTHER'
-  | 'SOURCE'
-  | 'COMPILATION'
-  | 'CONTAINS';
+  | "ADAPTATION"
+  | "PREQUEL"
+  | "SEQUEL"
+  | "PARENT"
+  | "SIDE_STORY"
+  | "CHARACTER"
+  | "SUMMARY"
+  | "ALTERNATIVE"
+  | "SPIN_OFF"
+  | "OTHER"
+  | "SOURCE"
+  | "COMPILATION"
+  | "CONTAINS";
 
 export type AniListMediaType =
-  | 'TV'
-  | 'TV_SHORT'
-  | 'MOVIE'
-  | 'SPECIAL'
-  | 'OVA'
-  | 'ONA'
-  | 'MUSIC';
+  | "TV"
+  | "TV_SHORT"
+  | "MOVIE"
+  | "SPECIAL"
+  | "OVA"
+  | "ONA"
+  | "MUSIC";
 
 export type AniListMediaStatus =
-  | 'FINISHED'
-  | 'RELEASING'
-  | 'NOT_YET_RELEASED'
-  | 'CANCELLED'
-  | 'HIATUS';
+  | "FINISHED"
+  | "RELEASING"
+  | "NOT_YET_RELEASED"
+  | "CANCELLED"
+  | "HIATUS";
 
 // ─── Core Nodes ─────────────────────────────────────────────────────────
 export interface AniListMediaTitle {
@@ -51,11 +51,13 @@ export interface AniListFuzzyDate {
 export interface AniListRelationNode {
   id: number;
   title: AniListMediaTitle;
-  type?: 'ANIME' | 'MANGA' | null;
+  type?: "ANIME" | "MANGA" | null;
   format?: AniListMediaType | null;
   status?: AniListMediaStatus | null;
   seasonYear?: number | null;
   startDate?: AniListFuzzyDate | null;
+  episodes?: number | null;
+  coverImage?: { medium?: string | null; large?: string | null } | null;
 }
 
 export interface AniListMediaRelations {
@@ -79,14 +81,13 @@ export interface AnimeSeasonItem {
   isCurrent?: boolean;
   unreleased?: boolean;
   year?: number | null;
+  episodes?: number | null;
+  coverImage?: string | null;
 }
 
 // ─── Query Input Shape ──────────────────────────────────────────────────
 /** Shape tối thiểu của Media query phục vụ buildAnimeSeasons */
-export interface AniListMediaForSeasons {
-  id: number;
-  title: AniListMediaTitle;
-  format?: AniListMediaType | null;
-  seasonYear?: number | null;
+export interface AniListMediaForSeasons extends AniListRelationNode {
   relations: AniListMediaRelations;
+  watchOrder?: number[];
 }

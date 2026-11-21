@@ -73,8 +73,7 @@ export function WatchPlayerSection({
 
   const totalEpisodes = isUpcoming
     ? 0
-    : (getReleasedEpisodeCount(anime) ??
-      (episodes.length || anime?.episodes || 0));
+    : (getReleasedEpisodeCount(anime) ?? episodes.length);
 
   const hasNextEpisode = currentEpisode < totalEpisodes;
   const handlePlayNextNow = useCallback(() => {
@@ -158,7 +157,7 @@ export function WatchPlayerSection({
       ref={playerRef}
       className="relative w-full aspect-video rounded-2xl sm:rounded-3xl overflow-hidden bg-black border border-purple-500/30 shadow-2xl shadow-black/90 group scroll-mt-32 fullscreen:h-full fullscreen:rounded-none fullscreen:border-0"
     >
-      {isUpcoming || totalEpisodes === 0 ? (
+      {isUpcoming ? (
         isTrailerMode && hasTrailer ? (
           <CustomVideoPlayer
             youtubeId={trailerId}

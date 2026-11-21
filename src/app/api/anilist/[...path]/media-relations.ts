@@ -1,106 +1,80 @@
 import { NextResponse } from "next/server";
+import type { AniListMediaForSeasons } from "@/types/anilist";
+import { orderFranchise } from "./franchise-order";
 import { queryAniList, RELATION_NODE_FIELDS } from "./graphql";
 
+const MAX_MEDIA = 64;
+const BATCH_SIZE = 25;
+const RELATIONS_QUERY = `
+  query ($ids: [Int]) {
+    Page(page: 1, perPage: 25) {
+      media(id_in: $ids, type: ANIME) {
+        ${RELATION_NODE_FIELDS}
+        relations { edges { relationType node { ${RELATION_NODE_FIELDS} } } }
+      }
+    }
+  }
+`;
+
 export async function getRelations(rootId: number) {
-  const ALLOWED_RELS = new Set([
-    "PREQUEL",
-    "SEQUEL",
-    "PARENT",
-    "SIDE_STORY",
-    "SPIN_OFF",
-  ]);
+  const media = new Map<number, AniListMediaForSeasons>();
+  const scheduled = new Set([rootId]);
+  const pending = [rootId];
+  const timeout = AbortSignal.timeout(6500);
 
-  const visited = new Map<number, any>();
-  const collectedEdges: Array<{ relationType: string; node: any }> = [];
-  let frontier: number[] = [rootId];
+  while (pending.length > 0 && !timeout.aborted) {
+    const ids = pending.splice(0, BATCH_SIZE);
+    const result = await queryAniList<{
+      Page?: { media?: AniListMediaForSeasons[] };
+    }>(RELATIONS_QUERY, { ids }, timeout).catch((error: unknown) => {
+      console.warn("[anilist.relations] Graph request failed", {
+        rootId,
+        ids,
+        reason: error instanceof Error ? error.name : "Unknown error",
+      });
+      return null;
+    });
+    const batch = result?.Page?.media ?? [];
+    const missing = ids.filter((id) => !batch.some((node) => node.id === id));
+    if (missing.length)
+      console.warn("[anilist.relations] Partial graph", { rootId, missing });
 
-  for (let depth = 0; depth < 3 && frontier.length > 0; depth++) {
-    const batchQuery = `
-      query ($ids: [Int]) {
-        Page(page: 1, perPage: 50) {
-          media(id_in: $ids, type: ANIME) {
-            ${RELATION_NODE_FIELDS}
-            relations {
-              edges {
-                relationType
-                node {
-                  ${RELATION_NODE_FIELDS}
-                }
-              }
-            }
-          }
-        }
-      }
-    `;
+    if (!media.size && !batch.length) {
+      return NextResponse.json(
+        { error: "Relation metadata unavailable" },
+        { status: result ? 404 : 502 },
+      );
+    }
 
-    const batchData = await queryAniList<{
-      Page?: { media?: any[] };
-    }>(batchQuery, { ids: frontier });
-
-    const mediaList = batchData?.Page?.media || [];
-    const nextFrontier: number[] = [];
-
-    for (const m of mediaList) {
-      if (!visited.has(m.id)) {
-        visited.set(m.id, m);
-      }
-
-      for (const edge of m.relations?.edges || []) {
-        const relType = edge.relationType;
-        const target = edge.node;
-        if (!target || target.type !== "ANIME" || !ALLOWED_RELS.has(relType)) {
+    for (const item of batch) {
+      media.set(item.id, item);
+      for (const { relationType, node } of item.relations?.edges ?? []) {
+        if (
+          node.type !== "ANIME" ||
+          scheduled.has(node.id) ||
+          (relationType !== "PREQUEL" &&
+            relationType !== "SEQUEL" &&
+            relationType !== "PARENT")
+        )
           continue;
-        }
-
-        if (!visited.has(target.id)) {
-          visited.set(target.id, target);
-          if (
-            relType === "PREQUEL" ||
-            relType === "SEQUEL" ||
-            relType === "PARENT"
-          ) {
-            nextFrontier.push(target.id);
-          }
-        }
-
-        if (target.id !== rootId) {
-          collectedEdges.push({
-            relationType: relType,
-            node: target,
-          });
-        }
+        if (scheduled.size >= MAX_MEDIA) continue;
+        scheduled.add(node.id);
+        pending.push(node.id);
       }
     }
-
-    frontier = Array.from(new Set(nextFrontier));
   }
 
-  const rootMedia = visited.get(rootId);
-  if (!rootMedia) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (scheduled.size === MAX_MEDIA) {
+    console.warn("[anilist.relations] Graph traversal limit reached", {
+      rootId,
+      limit: MAX_MEDIA,
+    });
   }
+  const root = media.get(rootId);
+  if (!root) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const uniqueMap = new Map<number, { relationType: string; node: any }>();
-  for (const item of collectedEdges) {
-    if (!uniqueMap.has(item.node.id)) {
-      uniqueMap.set(item.node.id, item);
-    }
-  }
-
-  const sortedEdges = Array.from(uniqueMap.values()).sort((a, b) => {
-    const yearA = a.node.seasonYear ?? a.node.startDate?.year ?? 9999;
-    const yearB = b.node.seasonYear ?? b.node.startDate?.year ?? 9999;
-    if (yearA !== yearB) return yearA - yearB;
-    return a.node.id - b.node.id;
-  });
-
+  const { watchOrder, edges } = orderFranchise(rootId, media.values());
   return NextResponse.json({
-    data: {
-      id: rootMedia.id,
-      title: rootMedia.title,
-      format: rootMedia.format,
-      seasonYear: rootMedia.seasonYear,
-      relations: { edges: sortedEdges },
-    },
+    data: { ...root, watchOrder, relations: { edges } },
   });
 }

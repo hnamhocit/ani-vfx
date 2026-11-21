@@ -1,10 +1,12 @@
 // Stream Source Resolver with AniList metadata scoring to avoid wrong specials/parodies
 import { type NextRequest, NextResponse } from "next/server";
 import type { StreamResponse, StreamServer } from "@/types/stream";
+import { getReleasedEpisodeCount } from "@/utils/anime";
 import { type AnimeMeta, fetchAnimeMeta } from "./anime-metadata";
 import { getConsumetStreams } from "./consumet";
 import { getPhimApiStreams } from "./phimapi";
 import { buildSearchCandidates } from "./search-candidates";
+import { resolveSplitRelease } from "./split-release";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -24,9 +26,15 @@ export async function GET(request: NextRequest) {
     const anilistId = parseInt(anilistIdStr, 10);
     if (!Number.isNaN(anilistId)) {
       meta = await fetchAnimeMeta(anilistId);
-      if (meta) {
-        candidates = buildSearchCandidates(meta);
+      if (!meta) {
+        return NextResponse.json<StreamResponse>({
+          success: false,
+          episode,
+          servers: [],
+          message: "Chưa xác minh được thông tin phần phim. Vui lòng thử lại.",
+        });
       }
+      candidates = buildSearchCandidates(meta);
     }
   }
 
@@ -55,11 +63,32 @@ export async function GET(request: NextRequest) {
     candidates = buildSearchCandidates(meta);
   }
 
-  const phimResult = await getPhimApiStreams(candidates, episode, meta);
-  const consumetServers = await getConsumetStreams(
-    candidates[0] || titleParam || englishTitleParam,
-    episode,
-  );
+  if (!meta) return NextResponse.json({ success: false, episode, servers: [] });
+
+  const episodeLimit = getReleasedEpisodeCount(meta) ?? meta.episodes;
+  if (episodeLimit != null && episode > episodeLimit) {
+    console.warn("[stream] Episode is outside the selected release", {
+      id: meta.id,
+      episode,
+      episodeLimit,
+    });
+    return NextResponse.json<StreamResponse>({
+      success: false,
+      episode,
+      servers: [],
+      message: `Tập ${episode} không thuộc phần phim này hoặc chưa phát hành.`,
+    });
+  }
+
+  const split = await resolveSplitRelease(meta);
+  const [phimResult, consumetServers] = await Promise.all([
+    getPhimApiStreams(candidates, episode, meta, split),
+    getConsumetStreams(
+      candidates[0] || titleParam || englishTitleParam,
+      episode,
+      meta,
+    ),
+  ]);
 
   const allServers: StreamServer[] = [];
   if (phimResult?.servers) allServers.push(...phimResult.servers);

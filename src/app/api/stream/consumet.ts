@@ -1,10 +1,15 @@
 import type { StreamServer } from "@/types/stream";
 
+import type { AnimeMeta } from "./anime-metadata";
+import { localEpisode, numberedEpisodes } from "./provider-episodes";
+import { matchesTitle, releaseTitles } from "./release-identity";
+
 const CONSUMET_API_URL = process.env.CONSUMET_API_URL?.replace(/\/$/, "");
 
 export async function getConsumetStreams(
   title: string,
   targetEp: number,
+  meta: AnimeMeta,
 ): Promise<StreamServer[]> {
   if (!CONSUMET_API_URL) return [];
 
@@ -16,7 +21,14 @@ export async function getConsumetStreams(
     if (!searchRes.ok) return [];
 
     const searchData = await searchRes.json();
-    const firstAnime = searchData.results?.[0];
+    const expected = releaseTitles(meta);
+    const firstAnime = (
+      searchData.results as Array<{ id: string; title?: string }> | undefined
+    )?.find(
+      (candidate) =>
+        typeof candidate.title === "string" &&
+        matchesTitle([candidate.title], expected),
+    );
     if (!firstAnime) return [];
 
     const infoRes = await fetch(
@@ -25,8 +37,20 @@ export async function getConsumetStreams(
     if (!infoRes.ok) return [];
 
     const infoData = await infoRes.json();
-    const epObj = infoData.episodes?.find(
-      (e: { number: number; id: string }) => e.number === targetEp,
+    if (
+      meta.seasonYear &&
+      Number(infoData.releaseDate) &&
+      Math.abs(meta.seasonYear - Number(infoData.releaseDate)) > 1
+    )
+      return [];
+    const episodes = (infoData.episodes ?? []) as Array<{
+      number: number;
+      id: string;
+    }>;
+    const epObj = localEpisode(
+      numberedEpisodes(episodes, (entry) => String(entry.number)),
+      targetEp,
+      meta.episodes,
     );
     if (!epObj) return [];
 

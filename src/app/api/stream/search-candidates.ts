@@ -1,41 +1,19 @@
 import type { AnimeMeta } from "./anime-metadata";
-
-export function cleanTitle(title: string): string {
-  return title
-    .replace(/[():[\]]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import { normalizeTitle, releaseTitles, splitTitle } from "./release-identity";
 
 export function buildSearchCandidates(meta: AnimeMeta): string[] {
-  const candidates: string[] = [];
-  const seen = new Set<string>();
-
-  const addCandidate = (raw: string | null) => {
-    if (!raw) return;
-    const cleaned = cleanTitle(raw);
-    if (cleaned && !seen.has(cleaned.toLowerCase())) {
-      seen.add(cleaned.toLowerCase());
-      candidates.push(cleaned);
-    }
-  };
-
-  addCandidate(meta.romaji);
-  addCandidate(meta.english);
-  addCandidate(meta.native);
-
-  for (const c of [...candidates]) {
-    const base = c
-      .replace(
-        /\s*(?:Season\s*\d+|\b[2-4](?:nd|rd|th)\b|\bPart\s*\d+\b).*$/i,
-        "",
-      )
+  const titles = releaseTitles(meta);
+  const candidates = new Map<string, string>();
+  for (const title of [
+    ...titles,
+    ...titles.map((title) => splitTitle(title).base),
+  ]) {
+    const query = title
+      .replace(/[():[\]]/g, " ")
+      .replace(/\s+/g, " ")
       .trim();
-    if (base && base !== c && !seen.has(base.toLowerCase())) {
-      seen.add(base.toLowerCase());
-      candidates.push(base);
-    }
+    const key = normalizeTitle(query);
+    if (key && !candidates.has(key)) candidates.set(key, query);
   }
-
-  return candidates;
+  return [...candidates.values()];
 }

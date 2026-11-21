@@ -6,6 +6,7 @@ import { EpisodeProgressBar } from "@/components/shared/EpisodeProgressBar";
 import { useUserStore } from "@/store/useUserStore";
 import { useWatchStore } from "@/store/useWatchStore";
 import { formatTime } from "@/utils/date-time";
+import { listAnimeEpisodes } from "@/utils/episodes";
 
 interface WatchEpisodeItem {
   id: number;
@@ -32,15 +33,11 @@ export function WatchEpisodeSelector() {
   const setEpisodeSearch = useWatchStore((s) => s.setEpisodeSearch);
   const selectEpisode = useWatchStore((s) => s.selectEpisode);
 
-  const isUpcoming = anime?.status === "NOT_YET_RELEASED";
-
-  const totalEpisodes = useMemo(() => {
-    if (!anime || isUpcoming) return 0;
-    const airedCount = anime.nextAiringEpisode
-      ? Math.max(1, anime.nextAiringEpisode.episode - 1)
-      : 0;
-    return Math.max(episodes.length, anime.episodes || 0, airedCount);
-  }, [anime, episodes.length, isUpcoming]);
+  const allEpisodes = useMemo(
+    () => listAnimeEpisodes(anime, episodes),
+    [anime, episodes],
+  );
+  const totalEpisodes = allEpisodes.length;
 
   const [selectedChunk, setSelectedChunk] = useState(0);
 
@@ -59,15 +56,6 @@ export function WatchEpisodeSelector() {
       return { index: idx, label: `${start} - ${end}` };
     });
   }, [totalEpisodes]);
-
-  const allEpisodes = useMemo(() => {
-    if (totalEpisodes === 0) return [];
-    if (episodes.length >= totalEpisodes) return episodes;
-    return Array.from({ length: totalEpisodes }, (_, idx) => ({
-      id: idx + 1,
-      title: `Tập ${idx + 1}`,
-    }));
-  }, [totalEpisodes, episodes]);
 
   const visibleEpisodes = useMemo(() => {
     const query = episodeSearch.trim();

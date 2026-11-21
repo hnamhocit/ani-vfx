@@ -1,11 +1,16 @@
 import type { StreamServer } from "@/types/stream";
 import type { AnimeMeta } from "./anime-metadata";
-import { cleanTitle } from "./search-candidates";
+import {
+  completeRangeStart,
+  localEpisode,
+  numberedEpisodes,
+} from "./provider-episodes";
+import { matchesTitle, releaseTitles } from "./release-identity";
+import type { SplitRelease } from "./split-release";
 
 interface PhimEpisodeData {
   name: string;
   slug: string;
-  filename: string;
   link_embed: string;
   link_m3u8: string;
 }
@@ -34,7 +39,8 @@ async function fetchPhimDetail(slug: string): Promise<PhimDetail | null> {
     if (!data.episodes) return null;
 
     const totalStr = String(data.movie?.episode_total || "");
-    const parsedTotal = parseInt(totalStr.replace(/\D/g, ""), 10) || 0;
+    const parsedTotal =
+      Number(totalStr.match(/^\s*(?:\d+\s*\/\s*)?(\d+)/)?.[1]) || 0;
 
     return {
       movieName: data.movie?.name || slug,
@@ -49,84 +55,56 @@ async function fetchPhimDetail(slug: string): Promise<PhimDetail | null> {
   }
 }
 
-function scorePhimMatch(
+function resolveProviderEpisode(
+  server: PhimServer,
   detail: PhimDetail,
-  meta: AnimeMeta | null,
-  maxServerEpCount: number,
-): number {
-  let score = 0;
-  const hay = `${detail.movieName} ${detail.originName}`.toLowerCase();
-
+  meta: AnimeMeta,
+  split: SplitRelease | null,
+  episode: number,
+) {
+  const titles = [detail.originName, detail.movieName];
+  const index = numberedEpisodes(server.server_data, (entry) => entry.name);
   if (
-    hay.includes("lego") ||
-    hay.includes("live action") ||
-    hay.includes("parody")
+    split &&
+    split.year &&
+    detail.year === split.year &&
+    detail.episodeTotal === split.total &&
+    matchesTitle(titles, split.titles)
   ) {
-    score -= 100;
+    const first = completeRangeStart(index, split.total);
+    if (first !== null && (!meta.episodes || episode <= meta.episodes)) {
+      const entry = index.get(first + split.offset + episode - 1);
+      if (entry) return { entry, priority: 1 };
+    }
+    return null;
   }
 
-  if (!meta) return score;
-
-  const titles = [meta.romaji, meta.english]
-    .filter(Boolean)
-    .map((t) => cleanTitle(t as string).toLowerCase());
-
-  if (titles.some((t) => detail.originName.toLowerCase() === t)) {
-    score += 50;
-  } else if (titles.some((t) => hay.includes(t))) {
-    score += 25;
-  }
-
-  if (meta.format === "MOVIE" && detail.type === "single") {
-    score += 30;
-  } else if (meta.format !== "MOVIE" && detail.type !== "single") {
-    score += 20;
-  }
-
+  if (!matchesTitle(titles, releaseTitles(meta))) return null;
   if (
     meta.seasonYear &&
     detail.year &&
-    Math.abs(meta.seasonYear - detail.year) <= 1
-  ) {
-    score += 20;
-  }
-
-  const actualCount = detail.episodeTotal || maxServerEpCount;
-  if (meta.episodes && actualCount > 0) {
-    const diff = Math.abs(meta.episodes - actualCount);
-    if (diff === 0) score += 40;
-    else if (diff <= 2) score += 20;
-    else if (meta.episodes >= 50 && actualCount < 15) score -= 60;
-  } else if (!meta.episodes && meta.format === "TV" && actualCount >= 50) {
-    score += 35;
-  }
-
-  return score;
-}
-
-function matchEpisode(
-  serverData: PhimEpisodeData[],
-  targetEp: number,
-): PhimEpisodeData | null {
-  for (const ep of serverData) {
-    const num = parseInt(ep.name.replace(/\D/g, ""), 10);
-    if (num === targetEp) return ep;
-
-    if (
-      targetEp === 1 &&
-      (ep.name.toLowerCase().includes("full") ||
-        ep.slug.toLowerCase().includes("full"))
-    ) {
-      return ep;
-    }
-  }
-  return null;
+    Math.abs(meta.seasonYear - detail.year) > 1
+  )
+    return null;
+  const count = meta.episodes;
+  if (count && (detail.episodeTotal > count || index.size > count)) return null;
+  const entry =
+    localEpisode(index, episode, count) ??
+    (episode === 1 &&
+    index.size === 0 &&
+    (count === 1 || meta.format === "MOVIE")
+      ? server.server_data.find((item) =>
+          /^(full|hoàn tất)$/i.test(item.name.trim()),
+        )
+      : undefined);
+  return entry ? { entry, priority: 2 } : null;
 }
 
 export async function getPhimApiStreams(
   candidates: string[],
   targetEp: number,
-  meta: AnimeMeta | null,
+  meta: AnimeMeta,
+  split: SplitRelease | null,
 ): Promise<{ animeName: string; servers: StreamServer[] } | null> {
   const searchedSlugs = new Set<string>();
   const matchedCandidates: Array<{
@@ -153,14 +131,23 @@ export async function getPhimApiStreams(
         if (!detail) continue;
 
         const servers: StreamServer[] = [];
-        let maxServerEpCount = 0;
+        let score = 0;
 
         for (const server of detail.episodes) {
-          if (server.server_data.length > maxServerEpCount) {
-            maxServerEpCount = server.server_data.length;
-          }
-          const matched = matchEpisode(server.server_data, targetEp);
-          if (!matched) continue;
+          const resolved = resolveProviderEpisode(
+            server,
+            detail,
+            meta,
+            split,
+            targetEp,
+          );
+          if (
+            !resolved ||
+            (!resolved.entry.link_embed && !resolved.entry.link_m3u8)
+          )
+            continue;
+          const matched = resolved.entry;
+          score = Math.max(score, resolved.priority);
 
           const isVietsub =
             server.server_name.toLowerCase().includes("vietsub") ||
@@ -180,20 +167,32 @@ export async function getPhimApiStreams(
 
         if (servers.length > 0) {
           matchedCandidates.push({
-            score: scorePhimMatch(detail, meta, maxServerEpCount),
+            score,
             animeName: detail.movieName,
             servers,
           });
         }
       }
 
-      if (matchedCandidates.some((c) => c.score >= 40)) {
+      if (matchedCandidates.some((c) => c.score === 2)) {
         break;
       }
-    } catch {}
+    } catch (error) {
+      console.warn("[stream.phimapi] Search failed", {
+        id: meta.id,
+        error: error instanceof Error ? error.name : "Unknown error",
+      });
+    }
   }
 
-  if (matchedCandidates.length === 0) return null;
+  if (matchedCandidates.length === 0) {
+    console.warn("[stream.phimapi] No verified source", {
+      id: meta.id,
+      episode: targetEp,
+      candidates: searchedSlugs.size,
+    });
+    return null;
+  }
 
   matchedCandidates.sort((a, b) => b.score - a.score);
   return {

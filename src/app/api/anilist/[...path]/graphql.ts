@@ -31,7 +31,9 @@ export const RELATION_NODE_FIELDS = `
   id
   title { romaji english native }
   type
+  coverImage { medium large }
   format
+  episodes
   status
   seasonYear
   startDate { year month day }
@@ -40,6 +42,7 @@ export const RELATION_NODE_FIELDS = `
 export async function queryAniList<T>(
   query: string,
   variables: Record<string, unknown> = {},
+  signal?: AbortSignal,
 ): Promise<T | null> {
   const res = await fetch(ANILIST_ENDPOINT, {
     method: "POST",
@@ -49,6 +52,7 @@ export async function queryAniList<T>(
     },
     body: JSON.stringify({ query, variables }),
     next: { revalidate: 300 },
+    signal,
   });
 
   if (!res.ok) return null;

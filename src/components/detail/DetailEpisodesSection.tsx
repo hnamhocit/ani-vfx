@@ -3,6 +3,7 @@
 import { Clock, LayoutGrid, List, Search, Tv } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useDetailStore } from "@/store/useDetailStore";
+import { listAnimeEpisodes } from "@/utils/episodes";
 import {
   type DetailEpisodeItem,
   DetailEpisodeLinks,
@@ -33,24 +34,11 @@ export function DetailEpisodesSection() {
 
   const isUpcoming = anime?.status === "NOT_YET_RELEASED";
 
-  const totalEpisodes = useMemo(() => {
-    if (!anime || isUpcoming) return 0;
-    const airedCount = anime.nextAiringEpisode
-      ? Math.max(1, anime.nextAiringEpisode.episode - 1)
-      : 0;
-    return Math.max(episodes.length, anime.episodes || 0, airedCount);
-  }, [anime, episodes.length, isUpcoming]);
-
-  const allEpisodes = useMemo(() => {
-    if (totalEpisodes === 0) return [];
-    if (episodes.length >= totalEpisodes) return episodes;
-    const map = new Map<number, DetailEpisodeItem>();
-    for (const ep of episodes) map.set(ep.id, ep);
-    return Array.from({ length: totalEpisodes }, (_, idx) => {
-      const epNum = idx + 1;
-      return map.get(epNum) || { id: epNum, title: `Tập ${epNum}` };
-    });
-  }, [totalEpisodes, episodes]);
+  const allEpisodes = useMemo(
+    () => listAnimeEpisodes(anime, episodes),
+    [anime, episodes],
+  );
+  const totalEpisodes = allEpisodes.length;
 
   const chunks = useMemo(() => {
     if (totalEpisodes <= CHUNK_SIZE) return [];
