@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "mal-vfx",
+      "name": "ani-vfx",
       "dependencies": {
         "@consumet/extensions": "^1.8.8",
         "@vntez/sdk": "^0.1.1",

@@ -2,6 +2,7 @@
 
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { homeCategoryHref } from "@/utils/home-categories";
 
 export function Footer() {
   return (
@@ -23,7 +24,7 @@ export function Footer() {
             </Link>
             <p className="text-xs text-zinc-400 leading-relaxed">
               Khám phá dữ liệu anime phong phú, theo dõi lịch phát sóng và trải
-              nghiệm xem phim nhanh chóng với dữ liệu từ MyAnimeList.
+              nghiệm xem phim nhanh chóng với dữ liệu từ AniList.
             </p>
           </div>
 
@@ -36,39 +37,30 @@ export function Footer() {
               Trang chủ
             </Link>
             <Link
-              href="/?category=now"
+              href={homeCategoryHref("now")}
               className="text-zinc-300 hover:text-purple-300 transition-colors"
             >
               Đang phát sóng
             </Link>
             <Link
-              href="/?category=popular"
+              href={homeCategoryHref("popular")}
               className="text-zinc-300 hover:text-purple-300 transition-colors"
             >
               Top thịnh hành
             </Link>
             <Link
-              href="/?category=upcoming"
+              href={homeCategoryHref("upcoming")}
               className="text-zinc-300 hover:text-purple-300 transition-colors"
             >
               Sắp ra mắt
             </Link>
             <a
-              href="https://myanimelist.net"
+              href="https://anilist.co"
               target="_blank"
               rel="noreferrer"
               className="text-zinc-400 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
             >
-              <span>MyAnimeList</span>
-              <ExternalLink className="w-3 h-3 text-zinc-500" />
-            </a>
-            <a
-              href="https://jikan.moe"
-              target="_blank"
-              rel="noreferrer"
-              className="text-zinc-400 hover:text-purple-300 transition-colors inline-flex items-center gap-1"
-            >
-              <span>Jikan API</span>
+              <span>AniList</span>
               <ExternalLink className="w-3 h-3 text-zinc-500" />
             </a>
           </div>
@@ -78,8 +70,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 text-[11px] sm:text-xs text-zinc-500 leading-relaxed">
           <p>
             © 2026 <span className="text-zinc-300 font-bold">AniVFX</span> • Dữ
-            liệu & hình ảnh thuộc quyền sở hữu của các tác giả và
-            MyAnimeList.net.
+            liệu & hình ảnh thuộc quyền sở hữu của các tác giả và AniList.
           </p>
           <p>
             Website phi thương mại phục vụ mục đích học tập & giải trí cá nhân.

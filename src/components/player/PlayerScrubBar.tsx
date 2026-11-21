@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
-import { formatTime } from "./types";
+import { formatTime } from "@/utils/date-time";
 
 interface PlayerScrubBarProps {
   currentTime: number;
@@ -13,6 +13,7 @@ interface PlayerScrubBarProps {
   onDragStart: (time: number) => void;
   onDragMove: (time: number) => void;
   onDragEnd: (time: number) => void;
+  onDragCancel: () => void;
 }
 
 export function PlayerScrubBar({
@@ -24,6 +25,7 @@ export function PlayerScrubBar({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onDragCancel,
 }: PlayerScrubBarProps) {
   const barRef = useRef<HTMLDivElement | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -34,7 +36,10 @@ export function PlayerScrubBar({
       const bar = barRef.current;
       if (!bar || !duration) return { time: 0, percent: 0 };
       const rect = bar.getBoundingClientRect();
-      const ratio = Math.min(Math.max(0, (clientX - rect.left) / rect.width), 1);
+      const ratio = Math.min(
+        Math.max(0, (clientX - rect.left) / rect.width),
+        1,
+      );
       return { time: ratio * duration, percent: ratio * 100 };
     },
     [duration],
@@ -75,6 +80,43 @@ export function PlayerScrubBar({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={() => {
+        setHoverTime(null);
+        onDragCancel();
+      }}
+      role="slider"
+      aria-label="Vị trí phát video"
+      aria-valuemin={0}
+      aria-valuemax={duration}
+      aria-valuenow={Math.min(displayedTime, duration)}
+      aria-valuetext={formatTime(displayedTime)}
+      aria-disabled={!duration}
+      tabIndex={duration ? 0 : -1}
+      onKeyDown={(event) => {
+        if (!duration) return;
+        const direction = {
+          ArrowLeft: -1,
+          ArrowDown: -1,
+          ArrowRight: 1,
+          ArrowUp: 1,
+        } as const;
+        let time: number;
+        if (event.key === "Home") time = 0;
+        else if (event.key === "End") time = duration;
+        else if (
+          event.key === "ArrowLeft" ||
+          event.key === "ArrowDown" ||
+          event.key === "ArrowRight" ||
+          event.key === "ArrowUp"
+        ) {
+          time = Math.min(
+            duration,
+            Math.max(0, currentTime + 5 * direction[event.key]),
+          );
+        } else return;
+        event.preventDefault();
+        onDragEnd(time);
+      }}
       onPointerLeave={() => {
         if (!isDragging) setHoverTime(null);
       }}
@@ -101,8 +143,9 @@ export function PlayerScrubBar({
       </div>
 
       <div
-        className={`absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white ring-2 ring-[#7950f2] shadow-lg transition-transform pointer-events-none ${isDragging ? "scale-125" : "scale-90 group-hover/scrub:scale-110"
-          }`}
+        className={`absolute -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white ring-2 ring-[#7950f2] shadow-lg transition-transform pointer-events-none ${
+          isDragging ? "scale-125" : "scale-90 group-hover/scrub:scale-110"
+        }`}
         style={{ left: `${Math.min(100, Math.max(0, progressPercent))}%` }}
       />
     </div>

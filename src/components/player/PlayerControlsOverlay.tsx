@@ -9,13 +9,12 @@ import {
   RotateCw,
   SkipBack,
   SkipForward,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
-import type React from "react";
+import { formatTime } from "@/utils/date-time";
 import { PlayerQualityMenu } from "./PlayerQualityMenu";
 import { PlayerScrubBar } from "./PlayerScrubBar";
-import { formatTime, type QualityOption } from "./types";
+import { PlayerVolumeControl } from "./PlayerVolumeControl";
+import type { QualityOption } from "./types";
 
 interface PlayerControlsOverlayProps {
   visible: boolean;
@@ -44,8 +43,9 @@ interface PlayerControlsOverlayProps {
   onDragStart: (time: number) => void;
   onDragMove: (time: number) => void;
   onDragEnd: (time: number) => void;
+  onDragCancel: () => void;
   onToggleMute: () => void;
-  onVolumeChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onVolumeChange: (volume: number) => void;
   onCyclePlaybackRate: () => void;
   onToggleQualityMenu: () => void;
   onSelectQuality: (index: number) => void;
@@ -79,6 +79,7 @@ export function PlayerControlsOverlay({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onDragCancel,
   onToggleMute,
   onVolumeChange,
   onCyclePlaybackRate,
@@ -90,15 +91,16 @@ export function PlayerControlsOverlay({
 
   return (
     <div
-      className={`absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/75 transition-opacity duration-200 flex flex-col justify-between ${visible
+      className={`absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/75 transition-opacity duration-200 flex flex-col justify-between ${
+        visible
           ? "opacity-100 pointer-events-auto"
           : "opacity-0 pointer-events-none"
-        }`}
+      }`}
     >
       {/* Top Bar */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="px-4 sm:px-5 pt-3.5 sm:pt-4 pb-4 flex items-center justify-between gap-3"
+        className="px-3 sm:px-5 pt-2 sm:pt-4 pb-1 sm:pb-4 flex items-center justify-between gap-3"
       >
         <p className="text-xs sm:text-sm md:text-base font-bold text-white truncate drop-shadow">
           {title}
@@ -156,8 +158,12 @@ export function PlayerControlsOverlay({
       {/* Bottom Controls */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className="px-3.5 sm:px-5 pb-3 sm:pb-4 pt-3 space-y-2"
+        className="px-2 sm:px-5 pb-1.5 sm:pb-4 pt-1 sm:pt-3 space-y-0.5 sm:space-y-2"
       >
+        <div className="sm:hidden font-mono text-[10px] text-zinc-300 tabular-nums">
+          {formatTime(displayedTime)} / {formatTime(duration)}
+        </div>
+
         <PlayerScrubBar
           currentTime={currentTime}
           duration={duration}
@@ -167,6 +173,7 @@ export function PlayerControlsOverlay({
           onDragStart={onDragStart}
           onDragMove={onDragMove}
           onDragEnd={onDragEnd}
+          onDragCancel={onDragCancel}
         />
 
         <div className="flex items-center justify-between gap-2 text-xs sm:text-sm text-zinc-200">
@@ -208,34 +215,14 @@ export function PlayerControlsOverlay({
               </button>
             )}
 
-            <div className="group/vol flex items-center">
-              <button
-                type="button"
-                onClick={onToggleMute}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white transition cursor-pointer"
-                aria-label={isMuted ? "Bật tiếng" : "Tắt tiếng"}
-              >
-                {isMuted || volume === 0 ? (
-                  <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-rose-400" />
-                ) : (
-                  <Volume2 className="w-4 h-4 sm:w-5 sm:h-5" />
-                )}
-              </button>
-              <div className="hidden sm:flex items-center overflow-hidden w-0 opacity-0 group-hover/vol:w-20 group-hover/vol:opacity-100 group-hover/vol:ml-1.5 transition-all duration-200">
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={isMuted ? 0 : volume}
-                  onChange={onVolumeChange}
-                  aria-label="Âm lượng"
-                  className="w-20 h-1 accent-[#7950f2] cursor-pointer"
-                />
-              </div>
-            </div>
+            <PlayerVolumeControl
+              volume={volume}
+              isMuted={isMuted}
+              onToggleMute={onToggleMute}
+              onChange={onVolumeChange}
+            />
 
-            <span className="font-mono text-[11px] sm:text-xs text-zinc-300 tabular-nums">
+            <span className="hidden sm:inline font-mono text-xs text-zinc-300 tabular-nums whitespace-nowrap">
               {formatTime(displayedTime)} / {formatTime(duration)}
             </span>
           </div>

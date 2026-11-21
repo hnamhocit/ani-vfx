@@ -1,13 +1,17 @@
 import Hls from "hls.js";
-import { usePathname } from "next/navigation";
-import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { QualityOption } from "./types";
 
 export function useHlsEngine(
   videoRef: RefObject<HTMLVideoElement | null>,
   src?: string,
 ) {
-  const pathname = usePathname();
   const hlsRef = useRef<Hls | null>(null);
 
   const [hasError, setHasError] = useState(false);
@@ -15,40 +19,9 @@ export function useHlsEngine(
   const [selectedQuality, setSelectedQuality] = useState<number>(-1);
   const [activeAutoHeight, setActiveAutoHeight] = useState<number | null>(null);
 
-  const disposeMedia = useCallback(() => {
-    if (hlsRef.current) {
-      hlsRef.current.stopLoad();
-      hlsRef.current.detachMedia();
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
-    const video = videoRef.current;
-    if (video) {
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    }
-  }, [videoRef]);
-
-  useEffect(() => {
-    return () => {
-      disposeMedia();
-    };
-  }, [disposeMedia, pathname]);
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !src) return;
-
-    setHasError(false);
-    setQualityLevels([]);
-    setSelectedQuality(-1);
-    setActiveAutoHeight(null);
-
-    if (hlsRef.current) {
-      hlsRef.current.destroy();
-      hlsRef.current = null;
-    }
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -56,8 +29,6 @@ export function useHlsEngine(
         lowLatencyMode: true,
       });
       hlsRef.current = hls;
-      hls.loadSource(src);
-      hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
         const mapped: QualityOption[] = data.levels
@@ -87,6 +58,8 @@ export function useHlsEngine(
           setHasError(true);
         }
       });
+      hls.loadSource(src);
+      hls.attachMedia(video);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = src;
     } else {
@@ -94,9 +67,14 @@ export function useHlsEngine(
     }
 
     return () => {
-      disposeMedia();
+      const hls = hlsRef.current;
+      hlsRef.current = null;
+      hls?.destroy();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
     };
-  }, [src, videoRef, disposeMedia]);
+  }, [src, videoRef]);
 
   const selectQuality = useCallback((levelIndex: number) => {
     setSelectedQuality(levelIndex);

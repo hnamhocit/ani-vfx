@@ -1,5 +1,5 @@
 {
-  "name": "mal-vfx",
+  "name": "ani-vfx",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "biome check",
-    "format": "biome format --write"
+    "format": "biome format --write",
+    "test:player": "node tests/player.mjs"
   },
   "dependencies": {
     "@consumet/extensions": "^1.8.8",

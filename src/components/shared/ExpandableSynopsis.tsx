@@ -24,26 +24,29 @@ export function ExpandableSynopsis({
 
   useEffect(() => {
     const el = textRef.current;
-    if (!el || !text) return;
-    if (!isExpanded) {
-      setCanExpand(
-        el.scrollHeight > el.clientHeight + 4 && text.length > 320,
-      );
-    }
+    if (!el || !text || isExpanded) return;
+    const measure = () => setCanExpand(el.scrollHeight > el.clientHeight + 1);
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [text, isExpanded]);
 
   return (
     <div className="space-y-1.5">
       <p
         ref={textRef}
-        className={`${textClassName} ${!isExpanded && canExpand ? "line-clamp-3 overflow-hidden" : ""
-          }`}
+        className={`${textClassName} ${
+          !isExpanded ? "line-clamp-3 overflow-hidden" : ""
+        }`}
       >
         {text}
       </p>
       {canExpand && (
         <button
           type="button"
+          aria-expanded={isExpanded}
           onClick={() => setIsExpanded((prev) => !prev)}
           className={`inline-flex items-center gap-1 transition-colors cursor-pointer ${buttonClassName}`}
         >

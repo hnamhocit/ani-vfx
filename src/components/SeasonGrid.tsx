@@ -141,28 +141,15 @@ export function SeasonGrid({
             );
           }
 
-          const targetHref = isCurrent
-            ? "#"
-            : mode === "watch"
-              ? `/anime/${season.id}/watch?ep=1`
-              : `/anime/${season.id}`;
-
-          return (
-            <Link
-              key={season.id}
-              href={targetHref}
-              className={`flex flex-col justify-between gap-2.5 p-3.5 rounded-2xl border transition-all min-h-[104px] w-full ${isCurrent
-                ? "bg-purple-950/80 border-purple-400 ring-2 ring-purple-400/50 text-white shadow-lg shadow-purple-600/30"
-                : "bg-[#181a28] hover:bg-[#222538] border-purple-500/20 text-zinc-300 hover:text-white hover:border-purple-400/60"
-                }`}
-            >
+          const card = (
+            <>
               <div className="flex items-start justify-between gap-2">
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30 leading-tight">
                   {relationLabel}
                 </span>
                 {isCurrent ? (
                   <span className="text-[10px] font-extrabold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/40 shrink-0 whitespace-nowrap">
-                    Đang xem
+                    {isUnreleased ? "Chưa ra mắt" : "Đang xem"}
                   </span>
                 ) : metaSuffix ? (
                   <span className="text-[11px] font-medium text-zinc-400 shrink-0">
@@ -173,6 +160,34 @@ export function SeasonGrid({
               <p className="text-xs sm:text-sm font-bold text-white line-clamp-2 leading-snug">
                 {season.title}
               </p>
+            </>
+          );
+
+          const cardClass =
+            "flex flex-col justify-between gap-2.5 p-3.5 rounded-2xl border min-h-[104px] w-full";
+          if (isCurrent) {
+            return (
+              <div
+                key={season.id}
+                aria-current="page"
+                className={`${cardClass} bg-purple-950/80 border-purple-400 ring-2 ring-purple-400/50 text-white shadow-lg shadow-purple-600/30`}
+              >
+                {card}
+              </div>
+            );
+          }
+
+          const href =
+            mode === "watch"
+              ? `/anime/${season.id}/watch?ep=1`
+              : `/anime/${season.id}`;
+          return (
+            <Link
+              key={season.id}
+              href={href}
+              className={`${cardClass} transition-all bg-[#181a28] hover:bg-[#222538] border-purple-500/20 text-zinc-300 hover:text-white hover:border-purple-400/60`}
+            >
+              {card}
             </Link>
           );
         })}

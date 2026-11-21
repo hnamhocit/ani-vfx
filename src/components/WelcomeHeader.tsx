@@ -1,19 +1,16 @@
 "use client";
 
-import { ArrowUpRight, History, Play } from "lucide-react";
+import { ArrowUpRight, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { formatVietnameseTime } from "@/components/player/types";
 import { useAnimeAppStore } from "@/store/useAnimeAppStore";
-import { useUserStore } from "@/store/useUserStore";
+import { getLatestEpisodeProgress, useUserStore } from "@/store/useUserStore";
+import { getWatchAction } from "@/utils/watch-action";
 
 export function WelcomeHeader() {
   const { user, isAuthenticated } = useUserStore();
-  const getLatestEpisodeProgress = useUserStore(
-    (s) => s.getLatestEpisodeProgress,
-  );
+  const watchProgress = useUserStore((s) => s.watchProgress);
   const history = useAnimeAppStore((s) => s.history);
-  const hydrateFromStorage = useAnimeAppStore((s) => s.hydrateFromStorage);
 
   const [greeting, setGreeting] = useState<{ text: string; emoji: string }>({
     text: "Chào buổi tối",
@@ -21,7 +18,6 @@ export function WelcomeHeader() {
   });
 
   useEffect(() => {
-    hydrateFromStorage();
     const hour = new Date().getHours();
     if (hour >= 5 && hour < 11) {
       setGreeting({ text: "Chào buổi sáng", emoji: "☀️" });
@@ -32,14 +28,29 @@ export function WelcomeHeader() {
     } else {
       setGreeting({ text: "Chào buổi tối", emoji: "🌙" });
     }
-  }, [hydrateFromStorage]);
+  }, []);
 
   const displayName =
     user?.name || (user?.email ? user.email.split("@")[0] : null);
 
-  const latestAnime = history[0];
-  const latestProgress = latestAnime
-    ? getLatestEpisodeProgress(latestAnime.id)
+  let latestAnime = history[0];
+  let latest = latestAnime
+    ? getLatestEpisodeProgress(watchProgress, latestAnime.id)
+    : null;
+
+  for (const anime of history.slice(1)) {
+    const progress = getLatestEpisodeProgress(watchProgress, anime.id);
+    if (
+      progress &&
+      (!latest || progress.progress.updatedAt > latest.progress.updatedAt)
+    ) {
+      latestAnime = anime;
+      latest = progress;
+    }
+  }
+
+  const action = latestAnime
+    ? getWatchAction(latestAnime.id, latest, latestAnime.releasedEpisodes)
     : null;
 
   return (
@@ -67,14 +78,10 @@ export function WelcomeHeader() {
         </h1>
       </div>
 
-      {latestAnime && (
+      {latestAnime && action && (
         <div className="flex items-center gap-2.5 self-start md:self-auto">
           <Link
-            href={
-              latestProgress
-                ? `/anime/${latestAnime.id}/watch?ep=${latestProgress.episode}`
-                : `/anime/${latestAnime.id}`
-            }
+            href={action.href}
             className="group flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-[#131624] hover:bg-[#1a1e30] border border-purple-500/25 hover:border-purple-400/60 transition shadow-md max-w-[320px]"
           >
             <span className="w-8 h-8 rounded-xl bg-purple-600/25 text-purple-300 group-hover:bg-purple-600 group-hover:text-white flex items-center justify-center shrink-0 transition">
@@ -83,9 +90,7 @@ export function WelcomeHeader() {
 
             <div className="min-w-0 text-left">
               <p className="text-[11px] text-zinc-400 font-semibold">
-                {latestProgress
-                  ? `Tiếp tục Tập ${latestProgress.episode} (${formatVietnameseTime(latestProgress.progress.currentTime)})`
-                  : "Xem gần đây"}
+                {action.label}
               </p>
               <p className="text-xs sm:text-sm font-bold text-white truncate">
                 {latestAnime.titleEnglish || latestAnime.title}

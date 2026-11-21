@@ -1,36 +1,49 @@
 "use client";
 
-import { AlertCircle, RefreshCw } from "lucide-react";
-import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { EmbedVideoPlayer } from "./EmbedVideoPlayer";
 import { PlayerControlsOverlay } from "./PlayerControlsOverlay";
+import { PlayerLoading } from "./PlayerLoading";
 import type { CustomVideoPlayerProps } from "./types";
 import { useHlsEngine } from "./useHlsEngine";
+import { usePlayerControls } from "./usePlayerControls";
 
-const HIDE_DELAY_MS = 1800;
-const SEEK_STEP_SECONDS = 10;
+export function CustomVideoPlayer(props: CustomVideoPlayerProps) {
+  if (props.src)
+    return <HlsVideoPlayer key={props.src} {...props} src={props.src} />;
+  const embedSrc =
+    props.embedUrl ||
+    (props.youtubeId
+      ? `https://www.youtube.com/embed/${props.youtubeId}?autoplay=1&rel=0`
+      : null);
+  return embedSrc ? (
+    <EmbedVideoPlayer
+      key={embedSrc}
+      src={embedSrc}
+      title={props.title ?? "Video Player"}
+    />
+  ) : null;
+}
 
-export function CustomVideoPlayer({
+function HlsVideoPlayer({
   src,
-  embedUrl,
-  youtubeId,
   title = "Video Player",
   poster,
-  initialTime = 0,
+  videoElementRef,
+  autoPlay,
   hasPrevEpisode,
   hasNextEpisode,
   onPrevEpisode,
   onNextEpisode,
   onTimeUpdate,
   onEnded,
-  onErrorRetry,
-}: CustomVideoPlayerProps) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const seekFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  checkpoint,
+  errorFallback,
+}: CustomVideoPlayerProps & { src: string }) {
+  const containerRef = useRef<HTMLFieldSetElement | null>(null);
+  const internalVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = videoElementRef ?? internalVideoRef;
   const isTouchRef = useRef(false);
-  const hasAppliedInitialTimeRef = useRef(false);
 
   const {
     hasError,
@@ -45,229 +58,45 @@ export function CustomVideoPlayer({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [buffered, setBuffered] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showControls, setShowControls] = useState(true);
-  const [seekFeedback, setSeekFeedback] = useState<string | null>(null);
   const [isQualityMenuOpen, setIsQualityMenuOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragTime, setDragTime] = useState(0);
 
-  const clearHideTimer = useCallback(() => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
-    }
-  }, []);
-
-  const scheduleHideControls = useCallback(() => {
-    clearHideTimer();
-    hideTimerRef.current = setTimeout(() => {
-      const video = videoRef.current;
-      if (
-        video &&
-        !video.paused &&
-        !video.ended &&
-        !isQualityMenuOpen &&
-        !isDragging
-      ) {
-        setShowControls(false);
-      }
-    }, HIDE_DELAY_MS);
-  }, [clearHideTimer, isQualityMenuOpen, isDragging]);
-
-  const revealControls = useCallback(() => {
-    setShowControls(true);
-    scheduleHideControls();
-  }, [scheduleHideControls]);
-
-  useEffect(() => {
-    hasAppliedInitialTimeRef.current = false;
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setIsQualityMenuOpen(false);
-  }, [src]);
-
-  useEffect(() => {
-    return () => {
-      clearHideTimer();
-      if (seekFeedbackTimerRef.current) clearTimeout(seekFeedbackTimerRef.current);
-    };
-  }, [clearHideTimer]);
-
-  useEffect(() => {
-    if (!isPlaying || isQualityMenuOpen || isDragging) {
-      clearHideTimer();
-      setShowControls(true);
-    } else {
-      scheduleHideControls();
-    }
-  }, [isPlaying, isQualityMenuOpen, isDragging, clearHideTimer, scheduleHideControls]);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (
-      video &&
-      initialTime > 0 &&
-      !hasAppliedInitialTimeRef.current &&
-      video.readyState >= 1
-    ) {
-      video.currentTime = initialTime;
-      hasAppliedInitialTimeRef.current = true;
-    }
-  }, [initialTime]);
-
-  useEffect(() => {
-    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener("fullscreenchange", onFsChange);
-    return () => document.removeEventListener("fullscreenchange", onFsChange);
-  }, []);
-
-  const togglePlay = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused || video.ended) {
-      video.play().catch(() => { });
-    } else {
-      video.pause();
-    }
-    revealControls();
-  }, [revealControls]);
-
-  const skipBy = useCallback(
-    (delta: number) => {
-      const video = videoRef.current;
-      if (!video) return;
-      const maxDuration = video.duration || duration || 0;
-      const nextTime = Math.min(Math.max(0, video.currentTime + delta), maxDuration);
-      video.currentTime = nextTime;
-      setCurrentTime(nextTime);
-      setSeekFeedback(delta > 0 ? `+${delta}s` : `${delta}s`);
-      if (seekFeedbackTimerRef.current) clearTimeout(seekFeedbackTimerRef.current);
-      seekFeedbackTimerRef.current = setTimeout(() => setSeekFeedback(null), 650);
-      revealControls();
-    },
-    [duration, revealControls],
+  const [loading, setLoading] = useState<"initial" | "buffering" | null>(
+    "initial",
   );
-
-  const toggleMute = useCallback(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
-    revealControls();
-  }, [revealControls]);
-
-  const toggleFullscreen = useCallback(async () => {
-    const container = containerRef.current;
-    if (!container) return;
-    if (!document.fullscreenElement) {
-      await container.requestFullscreen().catch(() => { });
-    } else {
-      await document.exitFullscreen().catch(() => { });
-    }
-    revealControls();
-  }, [revealControls]);
-
-  useEffect(() => {
-    if (!src) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        skipBy(-SEEK_STEP_SECONDS);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        skipBy(SEEK_STEP_SECONDS);
-      } else if (e.key === " ") {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        toggleMute();
-      } else if (e.key.toLowerCase() === "f") {
-        e.preventDefault();
-        toggleFullscreen();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [src, skipBy, togglePlay, toggleMute, toggleFullscreen]);
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-    const nextVol = Number(e.target.value);
-    video.volume = nextVol;
-    video.muted = nextVol === 0;
-    setVolume(nextVol);
-    setIsMuted(nextVol === 0);
-    revealControls();
-  };
-
-  const cyclePlaybackRate = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    const rates = [1, 1.25, 1.5, 2];
-    const nextRate = rates[(rates.indexOf(playbackRate) + 1) % rates.length];
-    video.playbackRate = nextRate;
-    setPlaybackRate(nextRate);
-    revealControls();
-  };
-
-  if (!src) {
-    const iframeSrc =
-      embedUrl ||
-      (youtubeId
-        ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1&rel=0`
-        : null);
-    if (!iframeSrc) return null;
-    return (
-      <div className="relative w-full h-full bg-black">
-        <iframe
-          src={iframeSrc}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-          allowFullScreen
-          className="w-full h-full border-0"
-        />
-      </div>
-    );
-  }
-
-  if (hasError) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950 text-zinc-200 space-y-3">
-        <AlertCircle className="w-11 h-11 text-rose-400" />
-        <p className="text-sm sm:text-base font-bold">
-          Không thể phát luồng HLS trên trình duyệt này
-        </p>
-        {onErrorRetry && (
-          <button
-            type="button"
-            onClick={onErrorRetry}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 text-white text-xs sm:text-sm font-bold transition cursor-pointer"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span>Chuyển sang trình phát Embed</span>
-          </button>
-        )}
-      </div>
-    );
-  }
+  const {
+    clearHideTimer,
+    revealControls,
+    showControls,
+    setShowControls,
+    seekFeedback,
+    isMuted,
+    volume,
+    playbackRate,
+    isFullscreen,
+    togglePlay,
+    skipBy,
+    toggleMute,
+    handleVolumeChange,
+    cyclePlaybackRate,
+    toggleFullscreen,
+  } = usePlayerControls({
+    videoRef,
+    containerRef,
+    hasError,
+    isPlaying,
+    isQualityMenuOpen,
+    isDragging,
+    setCurrentTime,
+  });
 
   const controlsVisible =
-    showControls || !isPlaying || isQualityMenuOpen || isDragging;
+    showControls ||
+    !isPlaying ||
+    isQualityMenuOpen ||
+    isDragging ||
+    Boolean(loading);
   const activeQualityLabel =
     selectedQuality === -1
       ? activeAutoHeight
@@ -276,8 +105,13 @@ export function CustomVideoPlayer({
       : qualityLevels.find((q) => q.index === selectedQuality)?.label || "HD";
 
   return (
-    <div
+    <fieldset
       ref={containerRef}
+      aria-label={title}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: Focusing the player enables its scoped keyboard shortcuts.
+      tabIndex={0}
+      onFocus={revealControls}
+      onBlur={revealControls}
       onMouseMove={() => {
         if (!isTouchRef.current) revealControls();
       }}
@@ -285,7 +119,13 @@ export function CustomVideoPlayer({
         if (!isTouchRef.current) revealControls();
       }}
       onMouseLeave={() => {
-        if (!isTouchRef.current && isPlaying && !isQualityMenuOpen && !isDragging) {
+        if (
+          !isTouchRef.current &&
+          isPlaying &&
+          !isQualityMenuOpen &&
+          !isDragging &&
+          !containerRef.current?.matches(":focus-visible, :has(:focus-visible)")
+        ) {
           clearHideTimer();
           setShowControls(false);
         }
@@ -293,7 +133,12 @@ export function CustomVideoPlayer({
       onTouchStart={() => {
         isTouchRef.current = true;
       }}
-      onClick={() => {
+      onClick={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest("button, input, [role=slider]")
+        )
+          return;
         if (isQualityMenuOpen) {
           setIsQualityMenuOpen(false);
           return;
@@ -313,89 +158,146 @@ export function CustomVideoPlayer({
         ref={videoRef}
         poster={poster}
         playsInline
-        preload="metadata"
+        preload="auto"
+        autoPlay={autoPlay && !checkpoint}
+        muted={isMuted}
         onLoadedMetadata={(e) => {
           const video = e.currentTarget;
-          setDuration(video.duration || 0);
-          if (initialTime > 0 && !hasAppliedInitialTimeRef.current) {
-            video.currentTime = initialTime;
-            hasAppliedInitialTimeRef.current = true;
+          const duration = Number.isFinite(video.duration) ? video.duration : 0;
+          setDuration(duration);
+          if (!checkpoint || duration <= 0) return;
+          const isCompatible =
+            Math.abs(duration - checkpoint.duration) <=
+            Math.max(5, duration * 0.03);
+          if (
+            isCompatible &&
+            checkpoint.time > 0 &&
+            checkpoint.time < duration
+          ) {
+            video.currentTime = checkpoint.time;
           }
+          if (checkpoint.wasPlaying) void video.play().catch(() => {});
         }}
         onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
+        onPause={(event) => {
+          setIsPlaying(false);
+          const video = event.currentTarget;
+          if (video.readyState >= 2) setLoading(null);
+          if (!video.ended)
+            onTimeUpdate?.(video.currentTime, video.duration, true);
+        }}
+        onCanPlay={() => setLoading(null)}
+        onPlaying={() => setLoading(null)}
+        onWaiting={(event) => {
+          if (!event.currentTarget.paused || event.currentTarget.seeking) {
+            setLoading((phase) => phase ?? "buffering");
+          }
+        }}
+        onSeeking={(event) => {
+          if (event.currentTarget.readyState < 3)
+            setLoading((phase) => phase ?? "buffering");
+        }}
+        onSeeked={(event) => {
+          if (event.currentTarget.paused || event.currentTarget.readyState >= 3)
+            setLoading(null);
+        }}
         onEnded={() => {
           setIsPlaying(false);
+          setLoading(null);
           onEnded?.();
         }}
         onTimeUpdate={(e) => {
           const video = e.currentTarget;
           const curr = video.currentTime;
-          const dur = video.duration || 0;
+          const dur = Number.isFinite(video.duration) ? video.duration : 0;
           if (!isDragging) setCurrentTime(curr);
           if (dur > 0) setDuration(dur);
-          if (video.buffered.length > 0) {
-            setBuffered(video.buffered.end(video.buffered.length - 1));
-          }
-          onTimeUpdate?.(curr, dur);
+          if (!video.ended) onTimeUpdate?.(curr, dur);
+        }}
+        onProgress={({ currentTarget: video }) => {
+          const ranges = video.buffered;
+          setBuffered(ranges.length ? ranges.end(ranges.length - 1) : 0);
         }}
         onError={() => setHasError(true)}
         className="w-full h-full object-contain"
       />
 
-      {seekFeedback && (
-        <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-black/80 border border-white/15 text-white font-heading font-black text-xs sm:text-sm shadow-xl">
-          {seekFeedback}
-        </div>
-      )}
+      {hasError ? (
+        (errorFallback ?? (
+          <p
+            role="alert"
+            className="absolute inset-0 grid place-items-center bg-zinc-950 text-white"
+          >
+            Không thể phát video
+          </p>
+        ))
+      ) : (
+        <>
+          {loading && (
+            <PlayerLoading>
+              {loading === "initial" ? "Đang tải video…" : "Đang tải bộ đệm…"}
+            </PlayerLoading>
+          )}
 
-      <PlayerControlsOverlay
-        visible={controlsVisible}
-        title={title}
-        activeQualityLabel={activeQualityLabel}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        buffered={buffered}
-        isDragging={isDragging}
-        dragTime={dragTime}
-        isMuted={isMuted}
-        volume={volume}
-        playbackRate={playbackRate}
-        isFullscreen={isFullscreen}
-        hasPrevEpisode={hasPrevEpisode}
-        hasNextEpisode={hasNextEpisode}
-        qualityLevels={qualityLevels}
-        selectedQuality={selectedQuality}
-        activeAutoHeight={activeAutoHeight}
-        isQualityMenuOpen={isQualityMenuOpen}
-        onTogglePlay={togglePlay}
-        onSkipBy={skipBy}
-        onPrevEpisode={onPrevEpisode}
-        onNextEpisode={onNextEpisode}
-        onDragStart={(time) => {
-          setIsDragging(true);
-          setDragTime(time);
-          clearHideTimer();
-        }}
-        onDragMove={(time) => setDragTime(time)}
-        onDragEnd={(time) => {
-          if (videoRef.current) videoRef.current.currentTime = time;
-          setCurrentTime(time);
-          setIsDragging(false);
-          revealControls();
-        }}
-        onToggleMute={toggleMute}
-        onVolumeChange={handleVolumeChange}
-        onCyclePlaybackRate={cyclePlaybackRate}
-        onToggleQualityMenu={() => setIsQualityMenuOpen((p) => !p)}
-        onSelectQuality={(idx) => {
-          selectQuality(idx);
-          setIsQualityMenuOpen(false);
-          revealControls();
-        }}
-        onToggleFullscreen={toggleFullscreen}
-      />
-    </div>
+          {seekFeedback && (
+            <div className="pointer-events-none absolute top-14 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-black/80 border border-white/15 text-white font-heading font-black text-xs sm:text-sm shadow-xl">
+              {seekFeedback}
+            </div>
+          )}
+
+          <PlayerControlsOverlay
+            visible={controlsVisible}
+            title={title}
+            activeQualityLabel={activeQualityLabel}
+            isPlaying={isPlaying}
+            currentTime={currentTime}
+            duration={duration}
+            buffered={buffered}
+            isDragging={isDragging}
+            dragTime={dragTime}
+            isMuted={isMuted}
+            volume={volume}
+            playbackRate={playbackRate}
+            isFullscreen={isFullscreen}
+            hasPrevEpisode={hasPrevEpisode}
+            hasNextEpisode={hasNextEpisode}
+            qualityLevels={qualityLevels}
+            selectedQuality={selectedQuality}
+            activeAutoHeight={activeAutoHeight}
+            isQualityMenuOpen={isQualityMenuOpen}
+            onTogglePlay={togglePlay}
+            onSkipBy={skipBy}
+            onPrevEpisode={onPrevEpisode}
+            onNextEpisode={onNextEpisode}
+            onDragStart={(time) => {
+              setIsDragging(true);
+              setDragTime(time);
+              clearHideTimer();
+            }}
+            onDragMove={(time) => setDragTime(time)}
+            onDragEnd={(time) => {
+              if (videoRef.current) videoRef.current.currentTime = time;
+              setCurrentTime(time);
+              setIsDragging(false);
+              revealControls();
+            }}
+            onDragCancel={() => {
+              setIsDragging(false);
+              revealControls();
+            }}
+            onToggleMute={toggleMute}
+            onVolumeChange={handleVolumeChange}
+            onCyclePlaybackRate={cyclePlaybackRate}
+            onToggleQualityMenu={() => setIsQualityMenuOpen((p) => !p)}
+            onSelectQuality={(idx) => {
+              selectQuality(idx);
+              setIsQualityMenuOpen(false);
+              revealControls();
+            }}
+            onToggleFullscreen={toggleFullscreen}
+          />
+        </>
+      )}
+    </fieldset>
   );
 }

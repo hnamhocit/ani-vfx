@@ -5,7 +5,7 @@ import { persist } from "zustand/middleware";
 // Client-side singleton for VntezClient with App ID 'ani-vfx'
 let vntezInstance: VntezClient | null = null;
 
-export function getVntez(): VntezClient | null {
+function getVntez(): VntezClient | null {
   if (typeof window === "undefined") return null;
   if (!vntezInstance) {
     vntezInstance = new VntezClient({
@@ -35,6 +35,8 @@ interface UserState {
 
   // Watch progress state: key is `${animeId}_${epNumber}`
   watchProgress: Record<string, EpisodeProgress>;
+  autoPlayNextEpisode: boolean;
+  setAutoPlayNextEpisode: (enabled: boolean) => void;
 
   // Auth actions
   login: (redirectUri?: string) => Promise<void>;
@@ -56,9 +58,23 @@ interface UserState {
   markWatched: (animeId: number, epNumber: number) => void;
   isWatched: (animeId: number, epNumber: number) => boolean;
   getWatchedEpisodesForAnime: (animeId: number) => number[];
-  getLatestEpisodeProgress: (
-    animeId: number,
-  ) => { episode: number; progress: EpisodeProgress } | null;
+}
+
+export function getLatestEpisodeProgress(
+  watchProgress: UserState["watchProgress"],
+  animeId: number,
+) {
+  const prefix = `${animeId}_`;
+  let latest: { episode: number; progress: EpisodeProgress } | null = null;
+  for (const [key, prog] of Object.entries(watchProgress)) {
+    if (!key.startsWith(prefix)) continue;
+    const ep = Number(key.slice(prefix.length));
+    if (Number.isNaN(ep)) continue;
+    if (!latest || prog.updatedAt > latest.progress.updatedAt) {
+      latest = { episode: ep, progress: prog };
+    }
+  }
+  return latest;
 }
 
 export const useUserStore = create<UserState>()(
@@ -70,6 +86,9 @@ export const useUserStore = create<UserState>()(
       isLoading: false,
       error: null,
       watchProgress: {},
+      autoPlayNextEpisode: true,
+      setAutoPlayNextEpisode: (enabled) =>
+        set({ autoPlayNextEpisode: enabled }),
 
       // Login redirect using VNTEZ IAM OAuth PKCE
       login: async (redirectUri?: string) => {
@@ -144,9 +163,9 @@ export const useUserStore = create<UserState>()(
           try {
             vntez.auth.signOut(
               redirectUrl ||
-              (typeof window !== "undefined"
-                ? window.location.origin
-                : undefined),
+                (typeof window !== "undefined"
+                  ? window.location.origin
+                  : undefined),
             );
           } catch {
             // Ignored
@@ -228,26 +247,15 @@ export const useUserStore = create<UserState>()(
         const prefix = `${animeId}_`;
         const result: number[] = [];
         for (const [key, prog] of Object.entries(get().watchProgress)) {
-          if (key.startsWith(prefix) && (prog.completed || prog.percentage >= 85)) {
+          if (
+            key.startsWith(prefix) &&
+            (prog.completed || prog.percentage >= 85)
+          ) {
             const ep = Number(key.slice(prefix.length));
             if (!Number.isNaN(ep)) result.push(ep);
           }
         }
         return result.sort((a, b) => a - b);
-      },
-
-      getLatestEpisodeProgress: (animeId: number) => {
-        const prefix = `${animeId}_`;
-        let latest: { episode: number; progress: EpisodeProgress } | null = null;
-        for (const [key, prog] of Object.entries(get().watchProgress)) {
-          if (!key.startsWith(prefix)) continue;
-          const ep = Number(key.slice(prefix.length));
-          if (Number.isNaN(ep)) continue;
-          if (!latest || prog.updatedAt > latest.progress.updatedAt) {
-            latest = { episode: ep, progress: prog };
-          }
-        }
-        return latest;
       },
     }),
     {
@@ -257,6 +265,7 @@ export const useUserStore = create<UserState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
         watchProgress: state.watchProgress,
+        autoPlayNextEpisode: state.autoPlayNextEpisode,
       }),
     },
   ),

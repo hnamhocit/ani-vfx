@@ -1,7 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance } from "axios";
 import type { AniListMediaForSeasons } from "@/types/anilist";
 
-export const anilistClient: AxiosInstance = axios.create({
+const anilistClient: AxiosInstance = axios.create({
   baseURL:
     typeof window === "undefined"
       ? `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/api/anilist`
@@ -52,18 +52,25 @@ async function processQueue() {
 
 function enqueueRequest<T>(task: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    queue.push({ execute: task as () => Promise<unknown>, resolve: resolve as any, reject });
+    queue.push({
+      execute: task as () => Promise<unknown>,
+      resolve: resolve as any,
+      reject,
+    });
     processQueue();
   });
 }
 
 function getCacheKey(url: string, params?: Record<string, unknown>): string {
   if (!params) return url;
-  const q = Object.keys(params).sort().map((k) => `${k}=${encodeURIComponent(String(params[k]))}`).join("&");
+  const q = Object.keys(params)
+    .sort()
+    .map((k) => `${k}=${encodeURIComponent(String(params[k]))}`)
+    .join("&");
   return `${url}?${q}`;
 }
 
-export async function requestWithRateLimit<T>(
+async function requestWithRateLimit<T>(
   url: string,
   params?: Record<string, unknown>,
   retries = 1,
@@ -82,7 +89,10 @@ export async function requestWithRateLimit<T>(
     while (attempt <= retries) {
       try {
         const res = await anilistClient.get<T>(url, { params: mergedParams });
-        cache.set(cacheKey, { data: res.data, expiresAt: Date.now() + CACHE_TTL_MS });
+        cache.set(cacheKey, {
+          data: res.data,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
         return res.data;
       } catch (error) {
         const axErr = error as AxiosError;
@@ -112,47 +122,58 @@ interface ApiResponse<T> {
 }
 
 export const anilistApi = {
-  getTopAnime(params?: { filter?: string; type?: string; page?: number; limit?: number }) {
+  getTopAnime(params?: {
+    filter?: string;
+    type?: string;
+    page?: number;
+    limit?: number;
+  }) {
     return requestWithRateLimit<ApiResponse<unknown[]>>("/top/anime", params);
   },
 
   getSeasonNow(page?: number) {
-    return requestWithRateLimit<ApiResponse<unknown[]>>("/seasons/now", { page });
+    return requestWithRateLimit<ApiResponse<unknown[]>>("/seasons/now", {
+      page,
+    });
   },
 
-  getSchedules(day?: string) {
-    return requestWithRateLimit<ApiResponse<unknown[]>>("/schedules", { filter: day });
-  },
-
-  searchAnime(params: { q?: string; genres?: string; type?: string; order_by?: string; sort?: string; page?: number; limit?: number }) {
+  searchAnime(params: {
+    q?: string;
+    genres?: string;
+    type?: string;
+    order_by?: string;
+    sort?: string;
+    page?: number;
+    limit?: number;
+  }) {
     return requestWithRateLimit<ApiResponse<unknown[]>>("/anime", params);
-  },
-
-  getAnimeGenres() {
-    return requestWithRateLimit<ApiResponse<string[]>>("/genres/anime");
   },
 
   getAnimeFull(id: number) {
     return requestWithRateLimit<ApiResponse<unknown>>(`/anime/${id}/full`);
   },
 
-  getAnimeVideos(id: number) {
-    return requestWithRateLimit<ApiResponse<unknown>>(`/anime/${id}/videos`);
-  },
-
-  getAnimeEpisodes(id: number, page?: number) {
-    return requestWithRateLimit<ApiResponse<unknown[]>>(`/anime/${id}/episodes`, { page });
+  getAnimeEpisodes(id: number) {
+    return requestWithRateLimit<ApiResponse<unknown[]>>(
+      `/anime/${id}/episodes`,
+    );
   },
 
   getAnimeCharacters(id: number) {
-    return requestWithRateLimit<ApiResponse<unknown>>(`/anime/${id}/characters`);
+    return requestWithRateLimit<ApiResponse<unknown>>(
+      `/anime/${id}/characters`,
+    );
   },
 
   getAnimeRecommendations(id: number) {
-    return requestWithRateLimit<ApiResponse<unknown>>(`/anime/${id}/recommendations`);
+    return requestWithRateLimit<ApiResponse<unknown>>(
+      `/anime/${id}/recommendations`,
+    );
   },
 
   getAnimeRelations(id: number) {
-    return requestWithRateLimit<ApiResponse<AniListMediaForSeasons>>(`/anime/${id}/relations`);
+    return requestWithRateLimit<ApiResponse<AniListMediaForSeasons>>(
+      `/anime/${id}/relations`,
+    );
   },
 };

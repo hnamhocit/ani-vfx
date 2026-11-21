@@ -4,8 +4,8 @@ import "./globals.css";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { SearchModal } from "@/components/SearchModal";
 import { TrailerModal } from "@/components/TrailerModal";
-import { WatchlistDrawer } from "@/components/WatchlistDrawer";
 import { AnimeAppProvider } from "@/context/AnimeAppContext";
+import { siteUrl } from "./site-url";
 
 const inter = Inter({
   subsets: ["latin", "vietnamese"],
@@ -22,20 +22,17 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://hnamhocit.vercel.app",
-  ),
+  metadataBase: siteUrl,
   title: {
     default: "AniVFX - Khám phá Anime & Xem Trailer Trực Tuyến",
     template: "%s | AniVFX",
   },
   description:
-    "Giao diện khám phá anime thế hệ mới, tổng hợp dữ liệu MyAnimeList (Jikan v4), theo dõi mùa phim, lịch sử xem, và stream anime chất lượng cao.",
+    "Giao diện khám phá anime thế hệ mới, tổng hợp dữ liệu AniList, theo dõi mùa phim, lịch sử xem, và stream anime chất lượng cao.",
   keywords: [
     "AniVFX",
     "Anime",
-    "MyAnimeList",
-    "Jikan API",
+    "AniList",
     "Xem anime",
     "Anime Vietsub",
     "Trailer Anime",
@@ -60,11 +57,11 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "vi_VN",
-    url: "https://hnamhocit.vercel.app",
+    url: siteUrl,
     siteName: "AniVFX",
     title: "AniVFX - Khám phá Anime & Xem Trailer Trực Tuyến",
     description:
-      "Khám phá anime thế hệ mới với dữ liệu MyAnimeList phong phú, theo dõi tập phim và trải nghiệm xem mượt mà.",
+      "Khám phá anime thế hệ mới với dữ liệu AniList phong phú, theo dõi tập phim và trải nghiệm xem mượt mà.",
     images: [
       {
         url: "/og-image.png",
@@ -78,7 +75,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "AniVFX - Khám phá Anime & Xem Trailer Trực Tuyến",
     description:
-      "Khám phá anime thế hệ mới với dữ liệu MyAnimeList phong phú và trải nghiệm xem mượt mà.",
+      "Khám phá anime thế hệ mới với dữ liệu AniList phong phú và trải nghiệm xem mượt mà.",
     creator: "@hnamhocit",
     images: ["/og-image.png"],
   },
@@ -100,15 +97,11 @@ export default function RootLayout({
     >
       <head>
         <meta name="referrer" content="strict-origin-when-cross-origin" />
-        <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-        <link rel="alternate icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
       </head>
       <body className="min-h-full flex flex-col bg-[#0b0c10] text-zinc-100 selection:bg-[#7950f2] selection:text-white font-sans text-base leading-relaxed">
         <AnimeAppProvider>
           {children}
           <TrailerModal />
-          <WatchlistDrawer />
           <SearchModal />
           <ScrollToTop />
         </AnimeAppProvider>

@@ -4,7 +4,8 @@ import { Check, CornerDownLeft, Play, Search, Tv } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EpisodeProgressBar } from "@/components/shared/EpisodeProgressBar";
 import { useUserStore } from "@/store/useUserStore";
-import { formatSeconds, useWatchStore } from "@/store/useWatchStore";
+import { useWatchStore } from "@/store/useWatchStore";
+import { formatTime } from "@/utils/date-time";
 
 interface WatchEpisodeItem {
   id: number;
@@ -144,10 +145,11 @@ export function WatchEpisodeSelector() {
                 key={chunk.index}
                 type="button"
                 onClick={() => setSelectedChunk(chunk.index)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap border transition cursor-pointer shrink-0 ${active
-                  ? "bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30"
-                  : "bg-[#181a28] hover:bg-[#23263a] text-zinc-300 border-purple-500/20"
-                  }`}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold whitespace-nowrap border transition cursor-pointer shrink-0 ${
+                  active
+                    ? "bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30"
+                    : "bg-[#181a28] hover:bg-[#23263a] text-zinc-300 border-purple-500/20"
+                }`}
               >
                 {chunk.label}
               </button>
@@ -172,15 +174,16 @@ export function WatchEpisodeSelector() {
               }}
               title={
                 epProg && epProg.currentTime > 0
-                  ? `Tập ${ep.id} - Đã xem đến ${formatSeconds(epProg.currentTime)}`
+                  ? `Tập ${ep.id} - Đã xem đến ${formatTime(epProg.currentTime)}`
                   : `Tập ${ep.id}`
               }
-              className={`relative flex flex-col items-center justify-center min-h-[44px] p-2 rounded-xl border transition-all cursor-pointer font-heading font-black text-xs sm:text-sm active:scale-95 ${isCurrent
-                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 ring-2 ring-emerald-400/70 shadow-lg shadow-emerald-600/30"
-                : watched
-                  ? "bg-[#181a28] text-emerald-400 border-emerald-500/35 hover:border-purple-400"
-                  : "bg-[#151724] text-zinc-200 border-purple-500/20 hover:bg-[#1f2235] hover:border-purple-400 hover:text-white"
-                }`}
+              className={`relative flex flex-col items-center justify-center min-h-[44px] p-2 rounded-xl border transition-all cursor-pointer font-heading font-black text-xs sm:text-sm active:scale-95 ${
+                isCurrent
+                  ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 ring-2 ring-emerald-400/70 shadow-lg shadow-emerald-600/30"
+                  : watched
+                    ? "bg-[#181a28] text-emerald-400 border-emerald-500/35 hover:border-purple-400"
+                    : "bg-[#151724] text-zinc-200 border-purple-500/20 hover:bg-[#1f2235] hover:border-purple-400 hover:text-white"
+              }`}
             >
               <div className="flex items-center justify-center gap-1">
                 {isCurrent ? (

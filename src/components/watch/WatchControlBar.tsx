@@ -1,39 +1,49 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Clock, Film, Play } from "lucide-react";
+import { useUserStore } from "@/store/useUserStore";
 import { useWatchStore } from "@/store/useWatchStore";
+import {
+  type AnimeReleaseInfo,
+  getReleasedEpisodeCount,
+  isAnimeUpcoming,
+} from "@/utils/anime";
 
-interface WatchControlBarAnime {
-  status?: string | null;
-  episodes?: number | null;
+interface WatchControlBarAnime extends AnimeReleaseInfo {
   trailer?: {
     id?: string | null;
     site?: string | null;
   } | null;
 }
 
-export function WatchControlBar() {
+import type { useWatchSource } from "./useWatchSource";
+
+export function WatchControlBar({
+  source,
+}: {
+  source: ReturnType<typeof useWatchSource>;
+}) {
   const anime = useWatchStore((s) => s.anime) as WatchControlBarAnime | null;
   const episodes = useWatchStore((s) => s.episodes);
   const currentEpisode = useWatchStore((s) => s.currentEpisode);
+  const streamLoading = useWatchStore((s) => s.streamLoading);
   const streamServers = useWatchStore((s) => s.streamServers);
   const activeServer = useWatchStore((s) => s.activeServer);
   const playerMode = useWatchStore((s) => s.playerMode);
   const isTrailerMode = useWatchStore((s) => s.isTrailerMode);
 
-  const selectServer = useWatchStore((s) => s.selectServer);
-  const setPlayerMode = useWatchStore((s) => s.setPlayerMode);
-  const enableTrailerMode = useWatchStore((s) => s.enableTrailerMode);
   const selectEpisode = useWatchStore((s) => s.selectEpisode);
+
+  const autoPlayNextEpisode = useUserStore((s) => s.autoPlayNextEpisode);
+  const setAutoPlayNextEpisode = useUserStore((s) => s.setAutoPlayNextEpisode);
 
   if (!anime) return null;
 
-  const isUpcoming =
-    anime.status === "NOT_YET_RELEASED" ||
-    (episodes.length === 0 && (!anime.episodes || anime.episodes === 0));
+  const isUpcoming = isAnimeUpcoming(anime, episodes.length);
   const totalEpisodes = isUpcoming
     ? 0
-    : episodes.length || anime.episodes || 0;
+    : (getReleasedEpisodeCount(anime) ??
+      (episodes.length || anime.episodes || 0));
   const hasTrailer = Boolean(
     anime.trailer?.site === "youtube" && anime.trailer?.id,
   );
@@ -49,11 +59,12 @@ export function WatchControlBar() {
           {hasTrailer && (
             <button
               type="button"
-              onClick={enableTrailerMode}
-              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${isTrailerMode
+              onClick={source.enableTrailerMode}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                isTrailerMode
                   ? "bg-[#7950f2] text-white shadow-md border border-purple-400"
                   : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-                }`}
+              }`}
             >
               <Film className="w-3.5 h-3.5" />
               <span>Xem Official Trailer</span>
@@ -76,11 +87,13 @@ export function WatchControlBar() {
                   <button
                     key={server.id}
                     type="button"
-                    onClick={() => selectServer(server)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${isActive
+                    aria-pressed={isActive}
+                    onClick={() => source.selectServer(server)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                      isActive
                         ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 border border-emerald-400"
                         : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-                      }`}
+                    }`}
                   >
                     <Play className="w-3.5 h-3.5 fill-current" />
                     <span>{server.serverName}</span>
@@ -89,43 +102,50 @@ export function WatchControlBar() {
               })
             ) : (
               <span className="text-xs font-semibold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-3 py-1.5 rounded-lg">
-                Chế độ dự phòng
+                {streamLoading ? "Đang tìm nguồn phát…" : "Chưa có máy chủ"}
               </span>
             )}
 
-            {activeServer?.m3u8Url && !isTrailerMode && (
-              <div className="flex items-center bg-[#1a1d2e] border border-purple-500/20 rounded-xl p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setPlayerMode("hls")}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${playerMode === "hls"
-                      ? "bg-purple-600 text-white shadow-sm"
-                      : "text-zinc-400 hover:text-white"
+            {activeServer?.m3u8Url &&
+              activeServer.embedUrl &&
+              !isTrailerMode && (
+                <div className="flex items-center bg-[#1a1d2e] border border-purple-500/20 rounded-xl p-0.5">
+                  <button
+                    type="button"
+                    aria-pressed={playerMode === "hls"}
+                    onClick={() => source.setPlayerMode("hls")}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      playerMode === "hls"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
                     }`}
-                >
-                  HLS Native
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPlayerMode("iframe")}
-                  className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${playerMode === "iframe"
-                      ? "bg-purple-600 text-white shadow-sm"
-                      : "text-zinc-400 hover:text-white"
+                  >
+                    HLS
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={playerMode === "iframe"}
+                    onClick={() => source.setPlayerMode("iframe")}
+                    className={`px-2.5 py-1 text-xs font-bold rounded-lg transition cursor-pointer ${
+                      playerMode === "iframe"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-zinc-400 hover:text-white"
                     }`}
-                >
-                  Embed
-                </button>
-              </div>
-            )}
+                  >
+                    Embed
+                  </button>
+                </div>
+              )}
 
             {hasTrailer && (
               <button
                 type="button"
-                onClick={enableTrailerMode}
-                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${isTrailerMode
+                onClick={source.enableTrailerMode}
+                className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition cursor-pointer ${
+                  isTrailerMode
                     ? "bg-[#7950f2] text-white shadow-md border border-purple-400"
                     : "bg-[#1a1d2e] hover:bg-[#252a42] text-zinc-300 border border-purple-500/20"
-                  }`}
+                }`}
               >
                 <Film className="w-3.5 h-3.5" />
                 <span>Trailer</span>
@@ -133,6 +153,19 @@ export function WatchControlBar() {
             )}
           </div>
 
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-200">
+            <input
+              type="checkbox"
+              checked={autoPlayNextEpisode}
+              onChange={(event) => {
+                setAutoPlayNextEpisode(event.currentTarget.checked);
+                if (!event.currentTarget.checked)
+                  useWatchStore.getState().setNextEpisodeCountdown(null);
+              }}
+              className="size-4 accent-purple-500"
+            />
+            Tự phát tập tiếp theo
+          </label>
           <div className="flex items-center gap-2 shrink-0 ml-auto">
             <button
               type="button"

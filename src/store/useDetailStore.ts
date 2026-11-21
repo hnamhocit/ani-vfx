@@ -10,9 +10,6 @@ interface DetailState {
   recommendations: unknown;
   relations: AniListMediaForSeasons | null;
 
-  episodePage: number;
-  totalEpisodePages: number;
-  totalEpisodesCount: number;
   episodeViewMode: "grid" | "list";
   episodeSearch: string;
 
@@ -20,9 +17,11 @@ interface DetailState {
   episodesLoading: boolean;
   error: string | null;
 
-  fetchDetailData: (id: number, addToHistory: (anime: any) => void) => Promise<void>;
-  fetchEpisodes: (id: number, page: number) => Promise<void>;
-  setEpisodePage: (page: number | ((prev: number) => number)) => void;
+  fetchDetailData: (
+    id: number,
+    addToHistory: (anime: any) => void,
+  ) => Promise<void>;
+  fetchEpisodes: (id: number) => Promise<void>;
   setEpisodeViewMode: (mode: "grid" | "list") => void;
   setEpisodeSearch: (query: string) => void;
 }
@@ -34,9 +33,6 @@ export const useDetailStore = create<DetailState>((set, get) => ({
   characters: null,
   recommendations: null,
   relations: null,
-  episodePage: 1,
-  totalEpisodePages: 1,
-  totalEpisodesCount: 0,
   episodeViewMode: "grid",
   episodeSearch: "",
   isLoading: true,
@@ -45,10 +41,15 @@ export const useDetailStore = create<DetailState>((set, get) => ({
 
   fetchDetailData: async (id, addToHistory) => {
     set({
-      animeId: id, anime: null, episodes: [], characters: null,
-      recommendations: null, relations: null,
-      episodePage: 1, totalEpisodePages: 1, totalEpisodesCount: 0,
-      episodeSearch: "", isLoading: true, error: null,
+      animeId: id,
+      anime: null,
+      episodes: [],
+      characters: null,
+      recommendations: null,
+      relations: null,
+      episodeSearch: "",
+      isLoading: true,
+      error: null,
     });
 
     try {
@@ -69,26 +70,29 @@ export const useDetailStore = create<DetailState>((set, get) => ({
       }
 
       set({
-        characters: charsRes.status === "fulfilled" ? charsRes.value.data : null,
-        recommendations: recsRes.status === "fulfilled" ? recsRes.value.data : null,
+        characters:
+          charsRes.status === "fulfilled" ? charsRes.value.data : null,
+        recommendations:
+          recsRes.status === "fulfilled" ? recsRes.value.data : null,
         relations: relsRes.status === "fulfilled" ? relsRes.value.data : null,
         isLoading: false,
       });
     } catch {
       if (get().animeId !== id) return;
-      set({ error: "Không có kết nối mạng. Vui lòng thử lại.", isLoading: false });
+      set({
+        error: "Không có kết nối mạng. Vui lòng thử lại.",
+        isLoading: false,
+      });
     }
   },
 
-  fetchEpisodes: async (id, page) => {
+  fetchEpisodes: async (id) => {
     set({ episodesLoading: true });
     try {
-      const res = await anilistApi.getAnimeEpisodes(id, page);
-      if (get().animeId !== id || get().episodePage !== page) return;
+      const res = await anilistApi.getAnimeEpisodes(id);
+      if (get().animeId !== id) return;
       set({
         episodes: res.data || [],
-        totalEpisodePages: res.pagination?.last_visible_page || 1,
-        totalEpisodesCount: res.pagination?.items?.total || (res.data as any[])?.length || 0,
         episodesLoading: false,
       });
     } catch {
@@ -97,8 +101,6 @@ export const useDetailStore = create<DetailState>((set, get) => ({
     }
   },
 
-  setEpisodePage: (page) =>
-    set((s) => ({ episodePage: typeof page === "function" ? page(s.episodePage) : page })),
   setEpisodeViewMode: (mode) => set({ episodeViewMode: mode }),
   setEpisodeSearch: (query) => set({ episodeSearch: query }),
 }));

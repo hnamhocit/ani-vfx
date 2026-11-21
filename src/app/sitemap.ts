@@ -1,5 +1,6 @@
 // Dynamic sitemap powered by AniList GraphQL
 import type { MetadataRoute } from "next";
+import { siteUrl } from "./site-url";
 
 const ANILIST_ENDPOINT = "https://graphql.anilist.co";
 
@@ -45,8 +46,7 @@ async function fetchTopAniListIds(): Promise<number[]> {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://hnamhocit.vercel.app";
+  const baseUrl = siteUrl.origin;
   const now = new Date();
 
   const staticRoutes: MetadataRoute.Sitemap = [

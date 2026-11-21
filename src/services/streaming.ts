@@ -10,22 +10,28 @@ import type { StreamResponse } from "@/types/stream";
  * Fetch streaming sources for a specific anime episode.
  * Ưu tiên dùng anilistId để search chính xác hơn title string.
  */
-export async function fetchEpisodeStream(params: {
-  anilistId: number;
-  episode: number;
-  /** Fallback title nếu anilistId không resolve được */
-  title?: string;
-  englishTitle?: string | null;
-}): Promise<StreamResponse> {
+export async function fetchEpisodeStream(
+  params: {
+    anilistId: number;
+    episode: number;
+    /** Fallback title nếu anilistId không resolve được */
+    title?: string;
+    englishTitle?: string | null;
+  },
+  signal?: AbortSignal,
+): Promise<StreamResponse> {
   const searchParams = new URLSearchParams();
   searchParams.set("anilistId", params.anilistId.toString());
   searchParams.set("episode", params.episode.toString());
 
   if (params.title) searchParams.set("title", params.title);
-  if (params.englishTitle) searchParams.set("englishTitle", params.englishTitle);
+  if (params.englishTitle)
+    searchParams.set("englishTitle", params.englishTitle);
 
   try {
-    const res = await fetch(`/api/stream?${searchParams.toString()}`);
+    const res = await fetch(`/api/stream?${searchParams.toString()}`, {
+      signal,
+    });
 
     if (!res.ok) {
       return {

@@ -1,27 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { parsePositiveInteger } from "@/utils/anime";
+import { resolveAnimeRoute } from "../../anime-metadata";
 import { AnimeWatchClient } from "./AnimeWatchClient";
-
-const ANILIST_ENDPOINT = "https://graphql.anilist.co";
-
-async function fetchAnimeMeta(id: number) {
-  try {
-    const res = await fetch(ANILIST_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: `query ($id: Int) { Media(id: $id, type: ANIME) { id title { romaji english native } coverImage { extraLarge large } } }`,
-        variables: { id },
-      }),
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data?.Media ?? null;
-  } catch {
-    return null;
-  }
-}
 
 export async function generateMetadata({
   params,
@@ -32,19 +13,25 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const sp = await searchParams;
-  const ep = typeof sp.ep === "string" ? parseInt(sp.ep, 10) : 1;
-  const numId = Number(id);
-  const media = await fetchAnimeMeta(numId);
-
-  const title = media?.title?.english || media?.title?.romaji || `Anime #${id}`;
+  const ep = parsePositiveInteger(sp.ep) ?? 1;
+  const { id: animeId, title, image } = await resolveAnimeRoute(id);
   const desc = `Xem ${title} Tập ${ep} Vietsub Full HD với tốc độ cao, trình phát video thông minh.`;
-  const img = media?.coverImage?.extraLarge || media?.coverImage?.large || "/og-image.png";
 
   return {
+    alternates: { canonical: `/anime/${animeId}/watch?ep=${ep}` },
     title: `${title} Tập ${ep} Vietsub Full HD`,
     description: desc,
-    openGraph: { title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`, description: desc, images: [{ url: img, alt: `${title} Tập ${ep}` }] },
-    twitter: { card: "summary_large_image", title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`, description: desc, images: [img] },
+    openGraph: {
+      title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`,
+      description: desc,
+      images: [{ url: image, alt: `${title} Tập ${ep}` }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `Xem ${title} Tập ${ep} Vietsub | AniVFX`,
+      description: desc,
+      images: [image],
+    },
   };
 }
 
@@ -57,8 +44,9 @@ async function WatchContent({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const ep = typeof sp.ep === "string" ? parseInt(sp.ep, 10) : 1;
-  return <AnimeWatchClient id={Number(id)} initialEpisode={ep || 1} />;
+  const ep = parsePositiveInteger(sp.ep) ?? 1;
+  const anime = await resolveAnimeRoute(id);
+  return <AnimeWatchClient id={anime.id} initialEpisode={ep} />;
 }
 
 export default function WatchPage({

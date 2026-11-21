@@ -1,16 +1,10 @@
 import { create } from "zustand";
 import { anilistApi } from "@/services/anilist";
 import { fetchEpisodeStream } from "@/services/streaming";
-import type { StreamServer } from "@/types/stream";
-import type { AniListMediaForSeasons } from "@/types/anilist";
 import type { EpisodeProgress } from "@/store/useUserStore";
-
-export function formatSeconds(sec: number): string {
-  if (!sec || Number.isNaN(sec)) return "00:00";
-  const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m}:${s < 10 ? "0" : ""}${s}`;
-}
+import type { AniListMediaForSeasons } from "@/types/anilist";
+import type { StreamServer } from "@/types/stream";
+import { isAnimeUpcoming } from "@/utils/anime";
 
 interface WatchState {
   animeId: number | null;
@@ -39,14 +33,21 @@ interface WatchState {
   copied: boolean;
   episodeSearch: string;
 
-  fetchWatchData: (id: number, initialEpisode: number, addToHistory: (anime: any) => void) => Promise<void>;
-  fetchStream: (getProgress: (id: number, ep: number) => EpisodeProgress | null | undefined) => Promise<void>;
+  fetchWatchData: (
+    id: number,
+    initialEpisode: number,
+    addToHistory: (anime: any) => void,
+  ) => Promise<void>;
+  fetchStream: (
+    episode: number,
+    getProgress: (id: number, ep: number) => EpisodeProgress | null | undefined,
+    signal: AbortSignal,
+  ) => Promise<void>;
   selectEpisode: (epNum: number) => void;
   selectServer: (server: StreamServer) => void;
   setPlayerMode: (mode: "hls" | "iframe") => void;
   enableTrailerMode: () => void;
   setShowResumePrompt: (show: boolean) => void;
-  setResumeTime: (time: number) => void;
   setNextEpisodeCountdown: (value: number | null) => void;
   decrementCountdown: () => void;
   toggleLike: () => void;
@@ -91,6 +92,10 @@ export const useWatchStore = create<WatchState>((set, get) => ({
       relations: null,
       streamServers: [],
       activeServer: null,
+      streamLoading: true,
+      streamError: null,
+      resumeTime: 0,
+      showResumePrompt: false,
       isTrailerMode: false,
       nextEpisodeCountdown: null,
       episodeSearch: "",
@@ -123,8 +128,8 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     const rawRecs =
       recsRes.status === "fulfilled"
         ? (recsRes.value.data as
-          | { nodes?: Array<{ mediaRecommendation?: unknown }> }
-          | unknown[])
+            | { nodes?: Array<{ mediaRecommendation?: unknown }> }
+            | unknown[])
         : null;
 
     const normalizedRecs = Array.isArray(rawRecs)
@@ -141,41 +146,58 @@ export const useWatchStore = create<WatchState>((set, get) => ({
     });
   },
 
-  fetchStream: async (getProgress) => {
-    const { anime, animeId, currentEpisode, episodes } = get();
-    if (!anime || !animeId) return;
+  fetchStream: async (currentEpisode, getProgress, signal) => {
+    const { anime, animeId, currentEpisode: selectedEpisode, episodes } = get();
+    if (!anime || !animeId || currentEpisode !== selectedEpisode) return;
 
-    const isUpcoming =
-      anime.status === "NOT_YET_RELEASED" ||
-      (episodes.length === 0 && (!anime.episodes || anime.episodes === 0));
+    const isUpcoming = isAnimeUpcoming(anime, episodes.length);
 
     if (isUpcoming) {
       set({
-        streamLoading: false, streamServers: [], activeServer: null,
+        streamLoading: false,
+        streamServers: [],
+        activeServer: null,
+        resumeTime: 0,
+        showResumePrompt: false,
         isTrailerMode: Boolean(anime.trailer?.id),
       });
       return;
     }
 
     const progress = getProgress(animeId, currentEpisode);
-    const hasResume = Boolean(progress) && (progress?.currentTime ?? 0) > 15 && !progress?.completed;
+    const hasResume =
+      progress !== null &&
+      progress !== undefined &&
+      progress.currentTime > 0 &&
+      !progress.completed &&
+      progress.percentage < 85;
 
     set({
-      streamLoading: true, streamError: null, isTrailerMode: false,
+      streamLoading: true,
+      streamError: null,
+      isTrailerMode: false,
       nextEpisodeCountdown: null,
-      resumeTime: hasResume ? progress?.currentTime ?? 0 : 0,
+      resumeTime: hasResume ? (progress?.currentTime ?? 0) : 0,
       showResumePrompt: hasResume,
     });
 
     try {
-      const res = await fetchEpisodeStream({
-        anilistId: animeId,
-        episode: currentEpisode,
-        title: anime.title?.romaji,
-        englishTitle: anime.title?.english,
-      });
+      const res = await fetchEpisodeStream(
+        {
+          anilistId: animeId,
+          episode: currentEpisode,
+          title: anime.title?.romaji,
+          englishTitle: anime.title?.english,
+        },
+        signal,
+      );
 
-      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) return;
+      if (
+        signal.aborted ||
+        get().animeId !== animeId ||
+        get().currentEpisode !== currentEpisode
+      )
+        return;
 
       if (res.success && res.servers.length > 0) {
         set({
@@ -188,16 +210,27 @@ export const useWatchStore = create<WatchState>((set, get) => ({
       } else {
         const hasTrailer = Boolean(anime.trailer?.id);
         set({
-          streamServers: [], activeServer: null, isTrailerMode: hasTrailer,
-          streamError: hasTrailer ? null : res.message || `Chưa tìm thấy nguồn cho Tập ${currentEpisode}.`,
+          streamServers: [],
+          activeServer: null,
+          isTrailerMode: hasTrailer,
+          streamError: hasTrailer
+            ? null
+            : res.message || `Chưa tìm thấy nguồn cho Tập ${currentEpisode}.`,
           streamLoading: false,
         });
       }
     } catch {
-      if (get().animeId !== animeId || get().currentEpisode !== currentEpisode) return;
+      if (
+        signal.aborted ||
+        get().animeId !== animeId ||
+        get().currentEpisode !== currentEpisode
+      )
+        return;
       const hasTrailer = Boolean(anime.trailer?.id);
       set({
-        streamServers: [], activeServer: null, isTrailerMode: hasTrailer,
+        streamServers: [],
+        activeServer: null,
+        isTrailerMode: hasTrailer,
         streamError: hasTrailer ? null : "Không có kết nối mạng.",
         streamLoading: false,
       });
@@ -207,25 +240,47 @@ export const useWatchStore = create<WatchState>((set, get) => ({
   selectEpisode: (epNum) => {
     const { animeId, currentEpisode } = get();
     if (epNum === currentEpisode || !animeId) return;
-    set((s) => ({ currentEpisode: epNum, nextEpisodeCountdown: null, scrollTrigger: s.scrollTrigger + 1 }));
+    set((s) => ({
+      currentEpisode: epNum,
+      activeServer: null,
+      streamServers: [],
+      streamLoading: true,
+      streamError: null,
+      showResumePrompt: false,
+      nextEpisodeCountdown: null,
+      scrollTrigger: s.scrollTrigger + 1,
+    }));
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", `/anime/${animeId}/watch?ep=${epNum}`);
+      window.history.replaceState(
+        null,
+        "",
+        `/anime/${animeId}/watch?ep=${epNum}`,
+      );
     }
   },
 
   selectServer: (server) =>
-    set({ activeServer: server, isTrailerMode: false, ...(server.m3u8Url ? { playerMode: "hls" as const } : {}) }),
+    set({
+      activeServer: server,
+      isTrailerMode: false,
+      playerMode: server.m3u8Url ? "hls" : "iframe",
+    }),
 
   setPlayerMode: (mode) => set({ playerMode: mode }),
   enableTrailerMode: () => set({ isTrailerMode: true, activeServer: null }),
   setShowResumePrompt: (show) => set({ showResumePrompt: show }),
-  setResumeTime: (time) => set({ resumeTime: time }),
   setNextEpisodeCountdown: (value) => set({ nextEpisodeCountdown: value }),
   decrementCountdown: () =>
-    set((s) => ({ nextEpisodeCountdown: s.nextEpisodeCountdown !== null ? s.nextEpisodeCountdown - 1 : null })),
+    set((s) => ({
+      nextEpisodeCountdown:
+        s.nextEpisodeCountdown !== null ? s.nextEpisodeCountdown - 1 : null,
+    })),
 
   toggleLike: () =>
-    set((s) => ({ liked: !s.liked, likeCount: !s.liked ? s.likeCount + 1 : s.likeCount - 1 })),
+    set((s) => ({
+      liked: !s.liked,
+      likeCount: !s.liked ? s.likeCount + 1 : s.likeCount - 1,
+    })),
 
   shareCurrentUrl: () => {
     if (typeof window === "undefined") return;
